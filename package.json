@@ -1,0 +1,21 @@
+{
+  "name": "cloth-simulation-webgpu",
+  "version": "1.0.0",
+  "description": "Cloth Simulation using WebGPU",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@webgpu/types": "^0.1.38",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8"
+  },
+  "dependencies": {
+    "gl-matrix": "^3.4.3"
+  }
+}
+
