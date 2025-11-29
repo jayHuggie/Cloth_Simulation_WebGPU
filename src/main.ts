@@ -1,6 +1,7 @@
 import { initWebGPU, loadShaderFromFile } from './utils/webgpu';
 import { Renderer } from './Renderer';
 import { Cloth } from './Cloth';
+import { SimpleCloth } from './SimpleCloth';
 import { Ground } from './Ground';
 import { Camera } from './Camera';
 import { vec3 } from 'gl-matrix';
@@ -8,7 +9,7 @@ import { vec3 } from 'gl-matrix';
 // Global state
 let device: GPUDevice;
 let renderer: Renderer;
-let cloth: Cloth;
+let cloth: Cloth | SimpleCloth;
 let camera: Camera;
 let canvas: HTMLCanvasElement;
 let isRunning: boolean = false;
@@ -17,10 +18,134 @@ let rightMouseDown: boolean = false;
 let mouseX: number = 0;
 let mouseY: number = 0;
 
+// Mode state
+type ClothMode = 'physics' | 'simple';
+let currentMode: ClothMode = 'physics';
+
 // UI callbacks
 let translateFixedFn: ((axis: number, shift: number) => void) | null = null;
 let rotateFixedFn: ((axis: number, shift: number) => void) | null = null;
 let resetCameraFn: (() => void) | null = null;
+
+function createCloth(numParticles: number): Cloth {
+    const ground = new Ground([-5.0, 0.0, -5.0], 10.0, device);
+    return new Cloth(
+        4.0, // size
+        100.0, // mass
+        numParticles, // N particles
+        [-2.0, 3.8, 0.0], // top left position
+        [1.0, 0.0, 0.0], // horizontal direction
+        [0.0, -1.0, 0.0], // vertical direction
+        device,
+        ground
+    );
+}
+
+function createSimpleCloth(numTriangles: number): SimpleCloth {
+    const ground = new Ground([-5.0, 0.0, -5.0], 10.0, device);
+    return new SimpleCloth(
+        4.0, // size
+        numTriangles, // target number of triangles
+        [-2.0, 3.8, 0.0], // top left position
+        [1.0, 0.0, 0.0], // horizontal direction
+        [0.0, -1.0, 0.0], // vertical direction
+        device,
+        ground
+    );
+}
+
+function recreateCloth(numParticles: number): void {
+    if (cloth) {
+        cloth.destroy();
+    }
+    cloth = createCloth(numParticles);
+    // Update triangle count display
+    const triangleCount = 2 * (numParticles - 1) * (numParticles - 1);
+    if (window.updateTriangleCount) {
+        window.updateTriangleCount(triangleCount);
+    }
+}
+
+function recreateSimpleCloth(numTriangles: number): void {
+    if (cloth instanceof SimpleCloth) {
+        // Use setNumTriangles if it's already a SimpleCloth (more efficient)
+        cloth.setNumTriangles(numTriangles);
+        const actualTriangleCount = cloth.getNumTriangles();
+        if (window.updateTriangleCount) {
+            window.updateTriangleCount(actualTriangleCount);
+        }
+    } else {
+        // Need to recreate if it's a different type
+        if (cloth) {
+            cloth.destroy();
+        }
+        cloth = createSimpleCloth(numTriangles);
+        if (cloth instanceof SimpleCloth) {
+            const actualTriangleCount = cloth.getNumTriangles();
+            if (window.updateTriangleCount) {
+                window.updateTriangleCount(actualTriangleCount);
+            }
+        }
+    }
+}
+
+function switchMode(mode: ClothMode): void {
+    if (currentMode === mode) return;
+    
+    currentMode = mode;
+    
+    if (cloth) {
+        cloth.destroy();
+    }
+    
+    if (mode === 'physics') {
+        cloth = createCloth(25);
+        const triangleCount = 2 * (25 - 1) * (25 - 1);
+        if (window.updateTriangleCount) {
+            window.updateTriangleCount(triangleCount);
+        }
+        // Update UI input value
+        const numParticlesInput = document.getElementById('numParticles') as HTMLInputElement;
+        if (numParticlesInput) numParticlesInput.value = '25';
+    } else {
+        cloth = createSimpleCloth(1000);
+        if (cloth instanceof SimpleCloth) {
+            const actualTriangleCount = cloth.getNumTriangles();
+            if (window.updateTriangleCount) {
+                window.updateTriangleCount(actualTriangleCount);
+            }
+            // Update UI input value
+            const numTrianglesInput = document.getElementById('numTriangles') as HTMLInputElement;
+            if (numTrianglesInput) numTrianglesInput.value = '1000';
+        }
+    }
+    
+    // Update UI visibility
+    updateUIVisibility();
+}
+
+function updateUIVisibility(): void {
+    const physicsControls = document.getElementById('cloth-coeffs');
+    const springDamperControls = document.getElementById('spring-damper');
+    const aerodynamicsControls = document.getElementById('aerodynamics');
+    const simpleControls = document.getElementById('simple-cloth-controls');
+    const numParticlesInput = document.getElementById('numParticles')?.parentElement;
+    
+    if (currentMode === 'physics') {
+        if (physicsControls) physicsControls.style.display = 'block';
+        if (numParticlesInput) numParticlesInput.style.display = 'block';
+        if (springDamperControls) springDamperControls.style.display = 'block';
+        if (aerodynamicsControls) aerodynamicsControls.style.display = 'block';
+        if (simpleControls) simpleControls.style.display = 'none';
+    } else {
+        // Simple mode - hide particle count but show other physics controls
+        if (physicsControls) physicsControls.style.display = 'block';
+        if (numParticlesInput) numParticlesInput.style.display = 'none';
+        if (springDamperControls) springDamperControls.style.display = 'block';
+        if (aerodynamicsControls) aerodynamicsControls.style.display = 'block';
+        if (simpleControls) simpleControls.style.display = 'block';
+    }
+}
 
 async function init(): Promise<void> {
     canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -58,20 +183,14 @@ async function init(): Promise<void> {
     camera.setAspect(canvas.width / canvas.height);
     camera.update();
 
-    // Create ground
-    const ground = new Ground([-5.0, 0.0, -5.0], 10.0, device);
-
     // Create cloth
-    cloth = new Cloth(
-        4.0, // size
-        100.0, // mass
-        25, // N particles
-        [-2.0, 3.0, 0.0], // top left position
-        [1.0, 0.0, 0.0], // horizontal direction
-        [0.0, -1.0, 0.0], // vertical direction
-        device,
-        ground
-    );
+    cloth = createCloth(25);
+    
+    // Initialize triangle count display
+    const triangleCount = 2 * (25 - 1) * (25 - 1);
+    if (window.updateTriangleCount) {
+        window.updateTriangleCount(triangleCount);
+    }
 
     // Setup UI callbacks
     setupUICallbacks();
@@ -87,11 +206,19 @@ async function init(): Promise<void> {
 
 function setupUICallbacks(): void {
     translateFixedFn = (axis: number, shift: number) => {
-        cloth.translateFixedParticles(axis, shift);
+        if (cloth instanceof Cloth) {
+            cloth.translateFixedParticles(axis, shift);
+        } else if (cloth instanceof SimpleCloth) {
+            cloth.translateFixedParticles(axis, shift);
+        }
     };
 
     rotateFixedFn = (axis: number, shift: number) => {
-        cloth.rotateFixedParticles(axis, shift);
+        if (cloth instanceof Cloth) {
+            cloth.rotateFixedParticles(axis, shift);
+        } else if (cloth instanceof SimpleCloth) {
+            cloth.rotateFixedParticles(axis, shift);
+        }
     };
 
     resetCameraFn = () => {
@@ -148,47 +275,97 @@ function setupUIControls(): void {
         window.setupUIControls(
             (id: string, value: number) => {
                 switch (id) {
+                    case 'numParticles':
+                        if (currentMode === 'physics') {
+                            const numParticles = Math.max(5, Math.min(39, Math.round(value)));
+                            recreateCloth(numParticles);
+                        }
+                        break;
+                    case 'numTriangles':
+                        if (currentMode === 'simple') {
+                            const numTriangles = Math.max(2, Math.min(10000, Math.round(value)));
+                            recreateSimpleCloth(numTriangles);
+                        }
+                        break;
                     case 'mass':
-                        cloth.setMass(value);
+                        if (cloth instanceof Cloth) {
+                            cloth.setMass(value);
+                        } else if (cloth instanceof SimpleCloth) {
+                            cloth.setMass(value);
+                        }
                         break;
                     case 'gravity':
-                        cloth.setGravityAcce(value);
+                        if (cloth instanceof Cloth) {
+                            cloth.setGravityAcce(value);
+                        } else if (cloth instanceof SimpleCloth) {
+                            cloth.setGravityAcce(value);
+                        }
                         break;
                     case 'ground':
-                        cloth.setGroundPos(value);
+                        if (cloth instanceof Cloth) {
+                            cloth.setGroundPos(value);
+                        } else if (cloth instanceof SimpleCloth) {
+                            cloth.setGroundPos(value);
+                        }
                         break;
                     case 'springConst':
-                        cloth.setSpringConst(value);
+                        if (cloth instanceof Cloth) {
+                            cloth.setSpringConst(value);
+                        } else if (cloth instanceof SimpleCloth) {
+                            cloth.setSpringConst(value);
+                        }
                         break;
                     case 'dampingConst':
-                        cloth.setDampingConst(value);
+                        if (cloth instanceof Cloth) {
+                            cloth.setDampingConst(value);
+                        } else if (cloth instanceof SimpleCloth) {
+                            cloth.setDampingConst(value);
+                        }
                         break;
                     case 'windX':
                     case 'windY':
                     case 'windZ': {
-                        const wind = cloth.getWindVelocity();
-                        if (id === 'windX') wind[0] = value;
-                        else if (id === 'windY') wind[1] = value;
-                        else if (id === 'windZ') wind[2] = value;
-                        cloth.setWindVelocity(wind);
+                        if (cloth instanceof Cloth) {
+                            const wind = cloth.getWindVelocity();
+                            if (id === 'windX') wind[0] = value;
+                            else if (id === 'windY') wind[1] = value;
+                            else if (id === 'windZ') wind[2] = value;
+                            cloth.setWindVelocity(wind);
+                        } else if (cloth instanceof SimpleCloth) {
+                            const wind = cloth.getWindVelocity();
+                            if (id === 'windX') wind[0] = value;
+                            else if (id === 'windY') wind[1] = value;
+                            else if (id === 'windZ') wind[2] = value;
+                            cloth.setWindVelocity(wind);
+                        }
                         break;
                     }
                     case 'fluidDensity':
-                        cloth.setFluidDensity(value);
+                        if (cloth instanceof Cloth) {
+                            cloth.setFluidDensity(value);
+                        } else if (cloth instanceof SimpleCloth) {
+                            cloth.setFluidDensity(value);
+                        }
                         break;
                     case 'dragConst':
-                        cloth.setDragConst(value);
+                        if (cloth instanceof Cloth) {
+                            cloth.setDragConst(value);
+                        } else if (cloth instanceof SimpleCloth) {
+                            cloth.setDragConst(value);
+                        }
                         break;
                 }
             },
             updateLighting,
-            updateColors
+            updateColors,
+            switchMode
         );
     }
     
     // Initialize lighting and colors from UI defaults
     updateLighting();
     updateColors();
+    updateUIVisibility();
 }
 
 function setupEventListeners(): void {
@@ -266,16 +443,20 @@ function setupEventListeners(): void {
 function renderLoop(): void {
     if (!isRunning) return;
 
-    // Update
+    // Update (both modes have physics now)
     cloth.update();
+    
+    // Update FPS
+    if (window.updateFPS) {
+        if (cloth instanceof Cloth) {
+            window.updateFPS(cloth.getFPS());
+        } else if (cloth instanceof SimpleCloth) {
+            window.updateFPS(cloth.getFPS());
+        }
+    }
 
     // Render
     renderer.render(cloth, camera);
-
-    // Update FPS
-    if (window.updateFPS) {
-        window.updateFPS(cloth.getFPS());
-    }
 
     requestAnimationFrame(renderLoop);
 }

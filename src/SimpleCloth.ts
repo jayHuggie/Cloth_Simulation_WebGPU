@@ -7,7 +7,7 @@ import { identity } from './utils/math';
 
 const EPSILON = 1e-6;
 
-export class Cloth {
+export class SimpleCloth {
     private positions: vec3[] = [];
     private normals: vec3[] = [];
     private indices: number[] = [];
@@ -23,7 +23,8 @@ export class Cloth {
 
     private size: number;
     private mass: number;
-    private numOfParticles: number;
+    private numTriangles: number; // Target number of triangles
+    private gridSize: number; // Grid resolution (will be calculated from numTriangles)
     private numOfOversamples: number = 20;
 
     // Physics parameters
@@ -56,8 +57,7 @@ export class Cloth {
 
     constructor(
         size: number,
-        mass: number,
-        N: number,
+        numTriangles: number,
         pos: vec3,
         hori: vec3,
         vert: vec3,
@@ -65,8 +65,8 @@ export class Cloth {
         ground: Ground
     ) {
         this.size = size;
-        this.mass = mass;
-        this.numOfParticles = N;
+        this.mass = 100.0;
+        this.numTriangles = numTriangles;
         this.topLeftPos = pos;
         this.horiDir = vec3.create();
         vec3.normalize(this.horiDir, hori);
@@ -80,14 +80,16 @@ export class Cloth {
     }
 
     private initialize(): void {
-        const gridLength = this.size / (this.numOfParticles - 1);
-
-        this.positions = new Array(this.numOfParticles * this.numOfParticles);
-        this.normals = new Array(this.numOfParticles * this.numOfParticles);
-
+        // Calculate grid size from target triangle count
+        // Each quad has 2 triangles, so we need sqrt(numTriangles / 2) quads per side
+        // Round up to ensure we have at least the target number
+        const quadsPerSide = Math.ceil(Math.sqrt(this.numTriangles / 2));
+        this.gridSize = quadsPerSide + 1; // +1 for vertices per side
+        
+        const gridLength = this.size / (this.gridSize - 1);
         this.restLength = gridLength;
         this.restLengthDiag = gridLength * Math.sqrt(2.0);
-        this.particleMass = this.mass / (this.numOfParticles * this.numOfParticles);
+        this.particleMass = this.mass / (this.gridSize * this.gridSize);
 
         if (this.groundPos > this.topLeftPos[1]) {
             this.groundPos = this.topLeftPos[1] - EPSILON;
@@ -103,17 +105,17 @@ export class Cloth {
         vec3.cross(norm, this.vertDir, this.horiDir);
         vec3.normalize(norm, norm);
 
-        // Create particles
-        for (let y = 0; y < this.numOfParticles; y++) {
-            for (let x = 0; x < this.numOfParticles; x++) {
-                const i = x + y * this.numOfParticles;
+        // Create particles and vertices in a grid
+        for (let y = 0; y < this.gridSize; y++) {
+            for (let x = 0; x < this.gridSize; x++) {
+                const i = x + y * this.gridSize;
                 const pos = vec3.create();
                 vec3.scaleAndAdd(pos, this.topLeftPos, this.horiDir, x * gridLength);
                 vec3.scaleAndAdd(pos, pos, this.vertDir, y * gridLength);
                 this.positions[i] = pos;
 
                 if (pos[1] < this.groundPos) {
-                    const j = i - this.numOfParticles;
+                    const j = i - this.gridSize;
                     if (j >= 0) {
                         vec3.scaleAndAdd(pos, this.positions[j], planeDir, gridLength);
                     }
@@ -133,15 +135,17 @@ export class Cloth {
             }
         }
 
-        // Create triangles
-        for (let y = 0; y < this.numOfParticles - 1; y++) {
-            for (let x = 0; x < this.numOfParticles - 1; x++) {
-                const topLeftIdx = x + y * this.numOfParticles;
+        // Create triangles (quads split into 2 triangles)
+        for (let y = 0; y < this.gridSize - 1; y++) {
+            for (let x = 0; x < this.gridSize - 1; x++) {
+                const topLeftIdx = x + y * this.gridSize;
                 const topRightIdx = topLeftIdx + 1;
-                const bottomLeftIdx = topLeftIdx + this.numOfParticles;
+                const bottomLeftIdx = topLeftIdx + this.gridSize;
                 const bottomRightIdx = bottomLeftIdx + 1;
 
+                // First triangle
                 this.indices.push(topLeftIdx, bottomLeftIdx, bottomRightIdx);
+                // Second triangle
                 this.indices.push(topLeftIdx, bottomRightIdx, topRightIdx);
 
                 const tri1 = new Triangle(
@@ -167,11 +171,11 @@ export class Cloth {
         }
 
         // Create spring dampers
-        for (let y = 0; y < this.numOfParticles - 1; y++) {
-            for (let x = 0; x < this.numOfParticles - 1; x++) {
-                const topLeftIdx = x + y * this.numOfParticles;
+        for (let y = 0; y < this.gridSize - 1; y++) {
+            for (let x = 0; x < this.gridSize - 1; x++) {
+                const topLeftIdx = x + y * this.gridSize;
                 const topRightIdx = topLeftIdx + 1;
-                const bottomLeftIdx = topLeftIdx + this.numOfParticles;
+                const bottomLeftIdx = topLeftIdx + this.gridSize;
                 const bottomRightIdx = bottomLeftIdx + 1;
 
                 this.connections.push(
@@ -211,7 +215,7 @@ export class Cloth {
                     )
                 );
 
-                if (x === this.numOfParticles - 2) {
+                if (x === this.gridSize - 2) {
                     this.connections.push(
                         new SpringDamper(
                             this.particles[topRightIdx],
@@ -222,7 +226,7 @@ export class Cloth {
                         )
                     );
                 }
-                if (y === this.numOfParticles - 2) {
+                if (y === this.gridSize - 2) {
                     this.connections.push(
                         new SpringDamper(
                             this.particles[bottomLeftIdx],
@@ -237,7 +241,7 @@ export class Cloth {
         }
 
         // Set fixed particles (top row)
-        for (let i = 0; i < this.numOfParticles; i++) {
+        for (let i = 0; i < this.gridSize; i++) {
             this.fixedParticleIdx.push(i);
             this.particles[i].setFixed(true);
         }
@@ -247,25 +251,42 @@ export class Cloth {
     }
 
     private createBuffers(): void {
-        const numVertices = this.numOfParticles * this.numOfParticles;
+        const numVertices = this.positions.length;
         const positionSize = numVertices * 3 * 4; // vec3 * float32
         const normalSize = numVertices * 3 * 4;
 
         try {
+            // Create position buffer and write data
+            const positions = new Float32Array(numVertices * 3);
+            for (let i = 0; i < numVertices; i++) {
+                positions[i * 3] = this.positions[i][0];
+                positions[i * 3 + 1] = this.positions[i][1];
+                positions[i * 3 + 2] = this.positions[i][2];
+            }
+            
             this.positionBuffer = this.device.createBuffer({
                 size: positionSize,
                 usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
             });
+            this.device.queue.writeBuffer(this.positionBuffer, 0, positions);
 
+            // Create normal buffer and write data
+            const normals = new Float32Array(numVertices * 3);
+            for (let i = 0; i < numVertices; i++) {
+                normals[i * 3] = this.normals[i][0];
+                normals[i * 3 + 1] = this.normals[i][1];
+                normals[i * 3 + 2] = this.normals[i][2];
+            }
+            
             this.normalBuffer = this.device.createBuffer({
                 size: normalSize,
                 usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
             });
+            this.device.queue.writeBuffer(this.normalBuffer, 0, normals);
 
             // Use Uint16 for indices if possible (saves memory), otherwise Uint32
             const maxIndex = numVertices - 1;
             if (maxIndex <= 65535) {
-                // Can use Uint16 (saves 50% memory)
                 const indexArray = new Uint16Array(this.indices);
                 this.indexFormat = 'uint16';
                 this.indexBuffer = this.device.createBuffer({
@@ -274,7 +295,6 @@ export class Cloth {
                 });
                 this.device.queue.writeBuffer(this.indexBuffer, 0, new Uint16Array(this.indices).buffer);
             } else {
-                // Need Uint32 for larger indices
                 const indexArray = new Uint32Array(this.indices);
                 this.indexFormat = 'uint32';
                 this.indexBuffer = this.device.createBuffer({
@@ -286,7 +306,7 @@ export class Cloth {
             this.indexCount = this.indices.length;
         } catch (error) {
             console.error('Failed to create buffers:', error);
-            throw new Error(`Failed to create cloth buffers. Particle count might be too high (${this.numOfParticles}). Try a lower value.`);
+            throw new Error(`Failed to create simple cloth buffers. Triangle count might be too high (${this.numTriangles}). Try a lower value.`);
         }
     }
 
@@ -324,6 +344,11 @@ export class Cloth {
             }
         }
 
+        // Update positions from particles
+        for (let i = 0; i < this.particles.length; i++) {
+            vec3.copy(this.positions[i], this.particles[i].getPosition());
+        }
+
         // Reset and recompute normals
         for (const n of this.normals) {
             n[0] = 0.0;
@@ -350,7 +375,7 @@ export class Cloth {
     }
 
     private updateBuffers(): void {
-        const numVertices = this.numOfParticles * this.numOfParticles;
+        const numVertices = this.positions.length;
         const positions = new Float32Array(numVertices * 3);
         const normals = new Float32Array(numVertices * 3);
 
@@ -366,6 +391,33 @@ export class Cloth {
 
         this.device.queue.writeBuffer(this.positionBuffer!, 0, positions);
         this.device.queue.writeBuffer(this.normalBuffer!, 0, normals);
+    }
+
+    setNumTriangles(numTriangles: number): void {
+        if (this.numTriangles === numTriangles) return;
+        
+        this.numTriangles = numTriangles;
+        
+        // Clean up old buffers
+        this.destroy();
+        
+        // Reinitialize with new triangle count
+        this.positions = [];
+        this.normals = [];
+        this.indices = [];
+        this.particles = [];
+        this.connections = [];
+        this.triangles = [];
+        this.fixedParticleIdx = [];
+        this.initialize();
+    }
+
+    getNumTriangles(): number {
+        return this.indexCount / 3; // Each triangle has 3 indices
+    }
+
+    getFPS(): number {
+        return this.fps;
     }
 
     getModelMatrix(): mat4 {
@@ -392,10 +444,6 @@ export class Cloth {
         return this.indexFormat;
     }
 
-    getFPS(): number {
-        return this.fps;
-    }
-
     getGround(): Ground {
         return this.ground;
     }
@@ -403,7 +451,7 @@ export class Cloth {
     // Getters and setters for parameters
     setMass(m: number): void {
         this.mass = m;
-        this.particleMass = this.mass / (this.numOfParticles * this.numOfParticles);
+        this.particleMass = this.mass / (this.gridSize * this.gridSize);
         // Update all particles' mass
         for (const p of this.particles) {
             p.setMass(this.particleMass);
@@ -491,24 +539,10 @@ export class Cloth {
         return this.c_d;
     }
 
-    getFixedParticleNum(): number {
-        return this.fixedParticleIdx.length;
-    }
-
-    getFixedParticlePos(i: number): vec3 {
-        return this.positions[this.fixedParticleIdx[i]];
-    }
-
-    setFixedParticlePos(i: number, pos: vec3): void {
-        if (pos[1] < this.groundPos) {
-            pos[1] = 2 * this.groundPos - pos[1];
-        }
-        vec3.copy(this.positions[this.fixedParticleIdx[i]], pos);
-    }
-
     translateFixedParticles(axis: number, shift: number): void {
         for (const idx of this.fixedParticleIdx) {
             this.positions[idx][axis] += shift;
+            vec3.copy(this.particles[idx].getPosition(), this.positions[idx]);
         }
     }
 
@@ -538,6 +572,7 @@ export class Cloth {
             const rotated = vec3.create();
             vec3.transformMat4(rotated, relative, rotMat);
             vec3.add(pos, midPoint, rotated);
+            vec3.copy(this.particles[idx].getPosition(), pos);
         }
     }
 

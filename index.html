@@ -168,11 +168,36 @@
         </div>
         
         <div class="control-group">
+            <div class="collapsible" onclick="toggleCollapse(this)">Cloth Mode</div>
+            <div class="collapsible-content" id="cloth-mode">
+                <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <input type="radio" name="clothMode" id="modePhysics" value="physics" checked onchange="switchClothMode('physics')">
+                    <span>Physics Mode (Particle-based simulation)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 10px;">
+                    <input type="radio" name="clothMode" id="modeSimple" value="simple" onchange="switchClothMode('simple')">
+                    <span>Simple Triangle Mode (Static mesh)</span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="control-group">
             <div class="collapsible" onclick="toggleCollapse(this)">Cloth Coefficients</div>
             <div class="collapsible-content" id="cloth-coeffs">
+                <label>Number of Particles: <input type="number" id="numParticles" step="1" min="5" max="39" value="25"></label>
+                <div class="info" id="triangleCount" style="margin-top: 10px; margin-bottom: 10px;">Triangles: 1152</div>
                 <label>Mass: <input type="number" id="mass" step="0.1" value="100"></label>
                 <label>Gravity: <input type="number" id="gravity" step="0.1" value="2"></label>
                 <label>Ground: <input type="number" id="ground" step="0.1" value="0"></label>
+                <div style="font-size: 11px; color: #999; margin-top: 5px;">⚠️ Particle number is limited to 5~39 for performance</div>
+            </div>
+        </div>
+        
+        <div class="control-group" id="simple-cloth-controls" style="display: none;">
+            <div class="collapsible" onclick="toggleCollapse(this)">Simple Triangle Mesh</div>
+            <div class="collapsible-content">
+                <label>Number of Triangles: <input type="number" id="numTriangles" step="2" min="2" max="10000" value="1000"></label>
+                <div style="font-size: 11px; color: #999; margin-top: 5px;">⚠️ Higher values may cause performance issues</div>
             </div>
         </div>
         
@@ -276,14 +301,36 @@
             document.getElementById('fps').textContent = `FPS: ${fps}`;
         };
         
-        window.setupUIControls = (updateCloth, updateLighting, updateColors) => {
-            const inputs = ['mass', 'gravity', 'ground', 'springConst', 'dampingConst', 
+        window.updateTriangleCount = (count) => {
+            document.getElementById('triangleCount').textContent = `Triangles: ${count}`;
+        };
+        
+        window.switchClothMode = (mode) => {
+            if (window.switchModeFn) {
+                window.switchModeFn(mode);
+            }
+        };
+        
+        window.setupUIControls = (updateCloth, updateLighting, updateColors, switchMode) => {
+            window.switchModeFn = switchMode;
+            
+            const inputs = ['numParticles', 'numTriangles', 'mass', 'gravity', 'ground', 'springConst', 'dampingConst', 
                            'windX', 'windY', 'windZ', 'fluidDensity', 'dragConst'];
             inputs.forEach(id => {
                 const input = document.getElementById(id);
                 if (input) {
                     input.addEventListener('input', () => {
                         const value = parseFloat(input.value);
+                        // Update triangle count display for particle count changes
+                        if (id === 'numParticles') {
+                            const clampedValue = Math.max(5, Math.min(39, Math.round(value)));
+                            const triangleCount = 2 * (clampedValue - 1) * (clampedValue - 1);
+                            if (window.updateTriangleCount) {
+                                window.updateTriangleCount(triangleCount);
+                            }
+                        } else if (id === 'numTriangles') {
+                            // Triangle count will be updated after recreation
+                        }
                         updateCloth(id, value);
                     });
                 }

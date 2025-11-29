@@ -1,6 +1,7 @@
 import { mat4 } from 'gl-matrix';
 import { mat4ToArray } from './utils/math';
 import { Cloth } from './Cloth';
+import { SimpleCloth } from './SimpleCloth';
 import { Ground } from './Ground';
 import { Camera } from './Camera';
 
@@ -137,7 +138,7 @@ export class Renderer {
         this.groundColor = [r, g, b];
     }
 
-    render(cloth: Cloth, camera: Camera): void {
+    render(cloth: Cloth | SimpleCloth, camera: Camera): void {
         const viewProj = camera.getViewProjectMtx();
         const model = cloth.getModelMatrix();
 
@@ -216,7 +217,7 @@ export class Renderer {
         pass.setBindGroup(0, this.createBindGroup());
         pass.setVertexBuffer(0, cloth.getPositionBuffer());
         pass.setVertexBuffer(1, cloth.getNormalBuffer());
-        pass.setIndexBuffer(cloth.getIndexBuffer(), 'uint32');
+        pass.setIndexBuffer(cloth.getIndexBuffer(), cloth.getIndexFormat());
         pass.drawIndexed(cloth.getIndexCount());
 
         // Render ground

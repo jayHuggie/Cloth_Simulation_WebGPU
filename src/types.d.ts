@@ -12,7 +12,11 @@ interface Window {
     setupUIControls?: (
         updateCloth: (id: string, value: number) => void,
         updateLighting: () => void,
-        updateColors: () => void
+        updateColors: () => void,
+        switchMode: (mode: 'physics' | 'simple') => void
     ) => void;
+    switchClothMode?: (mode: 'physics' | 'simple') => void;
+    switchModeFn?: (mode: 'physics' | 'simple') => void;
+    updateTriangleCount?: (count: number) => void;
 }
 
