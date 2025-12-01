@@ -18,5 +18,7 @@ interface Window {
     switchClothMode?: (mode: 'physics' | 'simple') => void;
     switchModeFn?: (mode: 'physics' | 'simple') => void;
     updateTriangleCount?: (count: number) => void;
+    toggleWireframe?: () => void;
+    toggleWireframeFn?: () => void;
 }
 

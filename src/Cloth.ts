@@ -50,6 +50,12 @@ export class Cloth {
     private positionBuffer: GPUBuffer | null = null;
     private normalBuffer: GPUBuffer | null = null;
     private indexBuffer: GPUBuffer | null = null;
+    // Quad-based wireframe buffers
+    private wireframePositionBuffer: GPUBuffer | null = null;
+    private wireframeNormalBuffer: GPUBuffer | null = null;
+    private wireframeIndexBuffer: GPUBuffer | null = null;
+    private wireframeIndexCount: number = 0;
+    private wireframeIndexFormat: GPUIndexFormat = 'uint32';
     private indexCount: number = 0;
     private indexFormat: GPUIndexFormat = 'uint32';
     private device: GPUDevice;
@@ -244,6 +250,206 @@ export class Cloth {
 
         // Create WebGPU buffers
         this.createBuffers();
+        this.createEdgeBuffers();
+    }
+
+    // Store edge pairs for wireframe generation
+    private wireframeEdgePairs: [number, number][] = [];
+    
+    private createEdgeBuffers(): void {
+        // Clean up old wireframe buffers if they exist
+        if (this.wireframePositionBuffer) {
+            this.wireframePositionBuffer.destroy();
+            this.wireframePositionBuffer = null;
+        }
+        if (this.wireframeNormalBuffer) {
+            this.wireframeNormalBuffer.destroy();
+            this.wireframeNormalBuffer = null;
+        }
+        if (this.wireframeIndexBuffer) {
+            this.wireframeIndexBuffer.destroy();
+            this.wireframeIndexBuffer = null;
+        }
+        
+        // Extract unique edges from triangle indices
+        const edgeSet = new Set<string>();
+        this.wireframeEdgePairs = [];
+        
+        // For each triangle, add its 3 edges
+        for (let i = 0; i < this.indices.length; i += 3) {
+            const i0 = this.indices[i];
+            const i1 = this.indices[i + 1];
+            const i2 = this.indices[i + 2];
+            
+            // Create edges (always store in sorted order to avoid duplicates)
+            const edgesToAdd: [number, number][] = [
+                [Math.min(i0, i1), Math.max(i0, i1)],
+                [Math.min(i1, i2), Math.max(i1, i2)],
+                [Math.min(i2, i0), Math.max(i2, i0)]
+            ];
+            
+            for (const [v0, v1] of edgesToAdd) {
+                const edgeKey = `${v0},${v1}`;
+                if (!edgeSet.has(edgeKey)) {
+                    edgeSet.add(edgeKey);
+                    this.wireframeEdgePairs.push([v0, v1]);
+                }
+            }
+        }
+        
+        if (this.wireframeEdgePairs.length === 0) {
+            console.warn('No edges found for wireframe rendering');
+            return;
+        }
+        
+        // Create initial wireframe buffers
+        this.updateWireframeBuffers();
+    }
+    
+    private updateWireframeBuffers(): void {
+        if (this.wireframeEdgePairs.length === 0) return;
+        
+        // Create quad geometry for each edge (thin rectangles)
+        const wireframeThickness = 0.03; // Thickness of wireframe lines in world space (increased from 0.01)
+        const wireframePositions: number[] = [];
+        const wireframeNormals: number[] = [];
+        const wireframeIndices: number[] = [];
+        
+        for (const [v0Idx, v1Idx] of this.wireframeEdgePairs) {
+            const v0 = this.positions[v0Idx];
+            const v1 = this.positions[v1Idx];
+            
+            // Calculate edge direction
+            const edgeDir = vec3.create();
+            vec3.sub(edgeDir, v1, v0);
+            const edgeLen = vec3.length(edgeDir);
+            if (edgeLen < EPSILON) continue;
+            vec3.normalize(edgeDir, edgeDir);
+            
+            // Calculate perpendicular vector for expansion
+            // Use a default up vector and cross product to get perpendicular
+            const up = vec3.fromValues(0, 1, 0);
+            let perp = vec3.create();
+            vec3.cross(perp, edgeDir, up);
+            const perpLen = vec3.length(perp);
+            
+            // If edge is parallel to up vector, use a different reference
+            if (perpLen < EPSILON) {
+                const right = vec3.fromValues(1, 0, 0);
+                vec3.cross(perp, edgeDir, right);
+                vec3.normalize(perp, perp);
+            } else {
+                vec3.normalize(perp, perp);
+            }
+            
+            // Scale perpendicular by half thickness
+            vec3.scale(perp, perp, wireframeThickness * 0.5);
+            
+            // Create 4 vertices for the quad
+            const baseIdx = wireframePositions.length / 3;
+            
+            // Vertex 0: v0 - perp
+            const v0a = vec3.create();
+            vec3.sub(v0a, v0, perp);
+            wireframePositions.push(v0a[0], v0a[1], v0a[2]);
+            
+            // Vertex 1: v0 + perp
+            const v0b = vec3.create();
+            vec3.add(v0b, v0, perp);
+            wireframePositions.push(v0b[0], v0b[1], v0b[2]);
+            
+            // Vertex 2: v1 - perp
+            const v1a = vec3.create();
+            vec3.sub(v1a, v1, perp);
+            wireframePositions.push(v1a[0], v1a[1], v1a[2]);
+            
+            // Vertex 3: v1 + perp
+            const v1b = vec3.create();
+            vec3.add(v1b, v1, perp);
+            wireframePositions.push(v1b[0], v1b[1], v1b[2]);
+            
+            // All normals point in edge direction (for flat shading)
+            const normal = vec3.clone(edgeDir);
+            for (let i = 0; i < 4; i++) {
+                wireframeNormals.push(normal[0], normal[1], normal[2]);
+            }
+            
+            // Create two triangles for the quad
+            // Triangle 1: 0, 1, 2
+            wireframeIndices.push(baseIdx, baseIdx + 1, baseIdx + 2);
+            // Triangle 2: 1, 3, 2
+            wireframeIndices.push(baseIdx + 1, baseIdx + 3, baseIdx + 2);
+        }
+        
+        if (wireframePositions.length === 0) {
+            console.warn('No wireframe quads generated');
+            return;
+        }
+        
+        try {
+            // Create or update position buffer
+            const positions = new Float32Array(wireframePositions);
+            const positionsSize = positions.byteLength;
+            
+            if (!this.wireframePositionBuffer || this.wireframePositionBuffer.size !== positionsSize) {
+                // Destroy old buffer if size changed
+                if (this.wireframePositionBuffer) {
+                    this.wireframePositionBuffer.destroy();
+                }
+                this.wireframePositionBuffer = this.device.createBuffer({
+                    size: positionsSize,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                });
+            }
+            this.device.queue.writeBuffer(this.wireframePositionBuffer, 0, positions);
+            
+            // Create or update normal buffer
+            const normals = new Float32Array(wireframeNormals);
+            const normalsSize = normals.byteLength;
+            
+            if (!this.wireframeNormalBuffer || this.wireframeNormalBuffer.size !== normalsSize) {
+                // Destroy old buffer if size changed
+                if (this.wireframeNormalBuffer) {
+                    this.wireframeNormalBuffer.destroy();
+                }
+                this.wireframeNormalBuffer = this.device.createBuffer({
+                    size: normalsSize,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                });
+            }
+            this.device.queue.writeBuffer(this.wireframeNormalBuffer, 0, normals);
+            
+            // Create or recreate index buffer if size changed
+            const numVertices = wireframePositions.length / 3;
+            const maxIndex = numVertices - 1;
+            const indexArray = maxIndex <= 65535 
+                ? new Uint16Array(wireframeIndices)
+                : new Uint32Array(wireframeIndices);
+            const indicesSize = indexArray.byteLength;
+            const indexFormat = maxIndex <= 65535 ? 'uint16' : 'uint32';
+            
+            if (!this.wireframeIndexBuffer || 
+                this.wireframeIndexBuffer.size !== indicesSize || 
+                this.wireframeIndexFormat !== indexFormat) {
+                // Destroy old buffer if size or format changed
+                if (this.wireframeIndexBuffer) {
+                    this.wireframeIndexBuffer.destroy();
+                }
+                this.wireframeIndexFormat = indexFormat;
+                this.wireframeIndexBuffer = this.device.createBuffer({
+                    size: indicesSize,
+                    usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+                });
+                this.device.queue.writeBuffer(this.wireframeIndexBuffer, 0, indexArray.buffer);
+                this.wireframeIndexCount = wireframeIndices.length;
+            }
+        } catch (error) {
+            console.error('Failed to create/update wireframe quad buffers:', error);
+            this.wireframePositionBuffer = null;
+            this.wireframeNormalBuffer = null;
+            this.wireframeIndexBuffer = null;
+            this.wireframeIndexCount = 0;
+        }
     }
 
     private createBuffers(): void {
@@ -284,6 +490,9 @@ export class Cloth {
                 this.device.queue.writeBuffer(this.indexBuffer, 0, new Uint32Array(this.indices).buffer);
             }
             this.indexCount = this.indices.length;
+            
+            // Ensure initial position and normal data is written
+            this.updateBuffers();
         } catch (error) {
             console.error('Failed to create buffers:', error);
             throw new Error(`Failed to create cloth buffers. Particle count might be too high (${this.numOfParticles}). Try a lower value.`);
@@ -293,6 +502,13 @@ export class Cloth {
     update(): void {
         const currT = performance.now();
         this.fpsCount++;
+        
+        // Handle first frame - if prevT is 0, skip physics update
+        if (this.prevT === 0) {
+            this.prevT = currT;
+            return;
+        }
+        
         this.interval += currT - this.prevT;
 
         if (this.interval >= 1000) {
@@ -302,6 +518,8 @@ export class Cloth {
         }
 
         let deltaT = (currT - this.prevT) / 1000.0;
+        // Clamp deltaT to prevent huge jumps (e.g., if tab was inactive)
+        deltaT = Math.min(deltaT, 0.1); // Max 100ms
         this.prevT = currT;
 
         deltaT /= this.numOfOversamples;
@@ -366,6 +584,11 @@ export class Cloth {
 
         this.device.queue.writeBuffer(this.positionBuffer!, 0, positions);
         this.device.queue.writeBuffer(this.normalBuffer!, 0, normals);
+        
+        // Update wireframe quads with current positions (only if buffers exist)
+        if (this.wireframeEdgePairs.length > 0 && this.wireframePositionBuffer && this.wireframeNormalBuffer) {
+            this.updateWireframeBuffers();
+        }
     }
 
     getModelMatrix(): mat4 {
@@ -390,6 +613,25 @@ export class Cloth {
 
     getIndexFormat(): GPUIndexFormat {
         return this.indexFormat;
+    }
+
+    getWireframeBuffers(): { 
+        positionBuffer: GPUBuffer; 
+        normalBuffer: GPUBuffer; 
+        indexBuffer: GPUBuffer; 
+        indexFormat: GPUIndexFormat; 
+        indexCount: number 
+    } | null {
+        if (!this.wireframePositionBuffer || !this.wireframeNormalBuffer || !this.wireframeIndexBuffer) {
+            return null;
+        }
+        return {
+            positionBuffer: this.wireframePositionBuffer,
+            normalBuffer: this.wireframeNormalBuffer,
+            indexBuffer: this.wireframeIndexBuffer,
+            indexFormat: this.wireframeIndexFormat,
+            indexCount: this.wireframeIndexCount
+        };
     }
 
     getFPS(): number {
@@ -554,6 +796,18 @@ export class Cloth {
         if (this.indexBuffer) {
             this.indexBuffer.destroy();
             this.indexBuffer = null;
+        }
+        if (this.wireframePositionBuffer) {
+            this.wireframePositionBuffer.destroy();
+            this.wireframePositionBuffer = null;
+        }
+        if (this.wireframeNormalBuffer) {
+            this.wireframeNormalBuffer.destroy();
+            this.wireframeNormalBuffer = null;
+        }
+        if (this.wireframeIndexBuffer) {
+            this.wireframeIndexBuffer.destroy();
+            this.wireframeIndexBuffer = null;
         }
     }
 }

@@ -14,11 +14,15 @@ export class Renderer {
     private canvas: HTMLCanvasElement;
 
     private renderPipeline: GPURenderPipeline | null = null;
+    private wireframePipeline: GPURenderPipeline | null = null;
     private uniformBuffer: GPUBuffer | null = null;
     private lightingBuffer: GPUBuffer | null = null;
 
     private vertexShader: GPUShaderModule | null = null;
     private fragmentShader: GPUShaderModule | null = null;
+    
+    private wireframeMode: boolean = false;
+    private wireframeColor: [number, number, number] = [0.0, 1.0, 1.0]; // Bright cyan wireframe
 
     // inital lighting and color parameters
     private light1Color: [number, number, number] = [1.0, 0.0, 0.0];
@@ -62,7 +66,7 @@ export class Renderer {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
-        // Create render pipeline
+        // Create render pipeline (filled triangles)
         this.renderPipeline = this.device.createRenderPipeline({
             layout: 'auto',
             vertex: {
@@ -95,6 +99,43 @@ export class Renderer {
             depthStencil: {
                 depthWriteEnabled: true,
                 depthCompare: 'less-equal',
+                format: 'depth24plus',
+            },
+        });
+
+        // Create wireframe pipeline (triangles for quad-based wireframe)
+        this.wireframePipeline = this.device.createRenderPipeline({
+            layout: 'auto',
+            vertex: {
+                module: this.vertexShader,
+                entryPoint: 'main',
+                buffers: [
+                    {
+                        arrayStride: 12, // 3 floats * 4 bytes
+                        attributes: [
+                            { shaderLocation: 0, offset: 0, format: 'float32x3' }, // position
+                        ],
+                    },
+                    {
+                        arrayStride: 12, // 3 floats * 4 bytes
+                        attributes: [
+                            { shaderLocation: 1, offset: 0, format: 'float32x3' }, // normal
+                        ],
+                    },
+                ],
+            },
+            fragment: {
+                module: this.fragmentShader,
+                entryPoint: 'main',
+                targets: [{ format: this.format }],
+            },
+            primitive: {
+                topology: 'triangle-list', // Use triangles for quad-based wireframe
+                cullMode: 'none',
+            },
+            depthStencil: {
+                depthWriteEnabled: false, // Don't write depth for wireframe
+                depthCompare: 'less', // Render wireframe when closer or equal (ensures it's visible)
                 format: 'depth24plus',
             },
         });
@@ -138,6 +179,14 @@ export class Renderer {
         this.groundColor = [r, g, b];
     }
 
+    setWireframeMode(enabled: boolean): void {
+        this.wireframeMode = enabled;
+    }
+
+    getWireframeMode(): boolean {
+        return this.wireframeMode;
+    }
+
     render(cloth: Cloth | SimpleCloth, camera: Camera): void {
         const viewProj = camera.getViewProjectMtx();
         const model = cloth.getModelMatrix();
@@ -160,41 +209,65 @@ export class Renderer {
             this.light2Position[2] ** 2
         );
 
-        // Update lighting buffer
+        // Update lighting buffer - prepare base lighting data
+        // In WGSL, vec3 is aligned to 16 bytes (4 floats), so layout is:
+        // ambientColor: offset 0 (indices 0-2, padding at 3)
+        // lightDirection: offset 16 (indices 4-6, padding at 7)
+        // lightColor: offset 32 (indices 8-10, padding at 11)
+        // lightDirection2: offset 48 (indices 12-14, padding at 15)
+        // lightColor2: offset 64 (indices 16-18, padding at 19)
+        // diffuseColor: offset 80 (indices 20-22, padding at 23)
         const lightingData = new Float32Array(64); // 256 bytes / 4
-        // Ambient color (lowered to make colors more vibrant)
+        
+        // Always use normal lighting for the cloth (same as when wireframe is off)
+        // Wireframe will have its own special lighting settings when rendered
         lightingData[0] = 0.15;
         lightingData[1] = 0.15;
         lightingData[2] = 0.15;
+        lightingData[3] = 0.0; // padding
         // Light 1 direction (normalized)
         lightingData[4] = light1Len > 0 ? this.light1Position[0] / light1Len : 0;
         lightingData[5] = light1Len > 0 ? this.light1Position[1] / light1Len : 0;
         lightingData[6] = light1Len > 0 ? this.light1Position[2] / light1Len : 0;
+        lightingData[7] = 0.0; // padding
         // Light 1 color
         lightingData[8] = this.light1Color[0];
         lightingData[9] = this.light1Color[1];
         lightingData[10] = this.light1Color[2];
+        lightingData[11] = 0.0; // padding
         // Light 2 direction (normalized)
         lightingData[12] = light2Len > 0 ? this.light2Position[0] / light2Len : 0;
         lightingData[13] = light2Len > 0 ? this.light2Position[1] / light2Len : 0;
         lightingData[14] = light2Len > 0 ? this.light2Position[2] / light2Len : 0;
+        lightingData[15] = 0.0; // padding
         // Light 2 color
         lightingData[16] = this.light2Color[0];
         lightingData[17] = this.light2Color[1];
         lightingData[18] = this.light2Color[2];
+        lightingData[19] = 0.0; // padding
         // Diffuse color (cloth color)
         lightingData[20] = this.clothColor[0];
         lightingData[21] = this.clothColor[1];
         lightingData[22] = this.clothColor[2];
-
+        lightingData[23] = 0.0; // padding
+        
+        // Write the buffer - WebGPU queue operations are automatically ordered
+        // However, to ensure the write completes before rendering, we'll write it and then
+        // create the encoder (which should ensure ordering)
         this.device.queue.writeBuffer(this.lightingBuffer!, 0, lightingData);
 
         // Get current texture from canvas
         const texture = this.context.getCurrentTexture();
         const textureView = texture.createView();
 
-        // Create command encoder
+        // Create command encoder AFTER buffer write
+        // In WebGPU, queue operations are ordered, so writes complete before commands execute
         const encoder = this.device.createCommandEncoder();
+        
+        // IMPORTANT: Create bind group AFTER buffer write to ensure it references updated buffer
+        // Note: Bind groups just reference the buffer, they don't cache data
+        const clothBindGroup = this.createBindGroup(this.renderPipeline!);
+        
         const pass = encoder.beginRenderPass({
             colorAttachments: [
                 {
@@ -212,13 +285,67 @@ export class Renderer {
             },
         });
 
-        // Render cloth
+        // Render cloth - check if buffers are valid
+        const positionBuffer = cloth.getPositionBuffer();
+        const normalBuffer = cloth.getNormalBuffer();
+        const indexBuffer = cloth.getIndexBuffer();
+        
+        if (!positionBuffer || !normalBuffer || !indexBuffer) {
+            console.warn('Cloth buffers not ready, skipping render');
+            pass.end();
+            this.device.queue.submit([encoder.finish()]);
+            return;
+        }
+
+        // Always render filled triangles first
+        // (Cloth uses normal lighting regardless of wireframe mode)
+        // Bind group was created AFTER buffer write to ensure it uses updated data
         pass.setPipeline(this.renderPipeline!);
-        pass.setBindGroup(0, this.createBindGroup());
-        pass.setVertexBuffer(0, cloth.getPositionBuffer());
-        pass.setVertexBuffer(1, cloth.getNormalBuffer());
-        pass.setIndexBuffer(cloth.getIndexBuffer(), cloth.getIndexFormat());
+        pass.setBindGroup(0, clothBindGroup);
+        pass.setVertexBuffer(0, positionBuffer);
+        pass.setVertexBuffer(1, normalBuffer);
+        pass.setIndexBuffer(indexBuffer, cloth.getIndexFormat());
         pass.drawIndexed(cloth.getIndexCount());
+
+        // If wireframe mode is enabled, overlay wireframe quads on top
+        if (this.wireframeMode && this.wireframePipeline) {
+            const wireframeBuffers = cloth.getWireframeBuffers();
+            if (wireframeBuffers && wireframeBuffers.indexCount > 0) {
+                // Create wireframe lighting data with bright cyan color
+                const wireframeLightingData = new Float32Array(64);
+                wireframeLightingData.set(lightingData);
+                // Set diffuse color to bright cyan for wireframe
+                wireframeLightingData[20] = this.wireframeColor[0];
+                wireframeLightingData[21] = this.wireframeColor[1];
+                wireframeLightingData[22] = this.wireframeColor[2];
+                // Make ambient VERY high so wireframe is always bright and visible
+                wireframeLightingData[0] = 2.0; // Overbright for maximum visibility
+                wireframeLightingData[1] = 2.0;
+                wireframeLightingData[2] = 2.0;
+                // Disable directional lights for wireframe (make it pure bright cyan)
+                wireframeLightingData[8] = 0.0;
+                wireframeLightingData[9] = 0.0;
+                wireframeLightingData[10] = 0.0;
+                wireframeLightingData[16] = 0.0;
+                wireframeLightingData[17] = 0.0;
+                wireframeLightingData[18] = 0.0;
+                this.device.queue.writeBuffer(this.lightingBuffer!, 0, wireframeLightingData);
+                
+                // Render wireframe quads (triangles) on top
+                pass.setPipeline(this.wireframePipeline);
+                pass.setBindGroup(0, this.createBindGroup(this.wireframePipeline));
+                pass.setVertexBuffer(0, wireframeBuffers.positionBuffer);
+                pass.setVertexBuffer(1, wireframeBuffers.normalBuffer);
+                pass.setIndexBuffer(wireframeBuffers.indexBuffer, wireframeBuffers.indexFormat);
+                pass.drawIndexed(wireframeBuffers.indexCount);
+            } else {
+                // Fallback: disable wireframe if buffers not available
+                console.warn('Wireframe buffers not available, disabling wireframe mode');
+                this.wireframeMode = false;
+                const wireframeToggle = document.getElementById('wireframeToggle') as HTMLInputElement;
+                if (wireframeToggle) wireframeToggle.checked = false;
+            }
+        }
 
         // Render ground
         const ground = cloth.getGround();
@@ -245,9 +372,9 @@ export class Renderer {
         this.device.queue.submit([encoder.finish()]);
     }
 
-    private createBindGroup(): GPUBindGroup {
+    private createBindGroup(pipeline: GPURenderPipeline): GPUBindGroup {
         return this.device.createBindGroup({
-            layout: this.renderPipeline!.getBindGroupLayout(0),
+            layout: pipeline.getBindGroupLayout(0),
             entries: [
                 {
                     binding: 0,

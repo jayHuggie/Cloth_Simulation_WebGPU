@@ -107,6 +107,12 @@ function switchMode(mode: ClothMode): void {
         // Update UI input value
         const numParticlesInput = document.getElementById('numParticles') as HTMLInputElement;
         if (numParticlesInput) numParticlesInput.value = '25';
+        // Disable wireframe mode when switching to physics
+        if (renderer) {
+            renderer.setWireframeMode(false);
+        }
+        const wireframeToggle = document.getElementById('wireframeToggle') as HTMLInputElement;
+        if (wireframeToggle) wireframeToggle.checked = false;
     } else {
         cloth = createSimpleCloth(1000);
         if (cloth instanceof SimpleCloth) {
@@ -114,10 +120,13 @@ function switchMode(mode: ClothMode): void {
             if (window.updateTriangleCount) {
                 window.updateTriangleCount(actualTriangleCount);
             }
-            // Update UI input value
-            const numTrianglesInput = document.getElementById('numTriangles') as HTMLInputElement;
-            if (numTrianglesInput) numTrianglesInput.value = '1000';
         }
+        // Enable wireframe mode by default when switching to simple mode
+        if (renderer) {
+            renderer.setWireframeMode(true);
+        }
+        const wireframeToggle = document.getElementById('wireframeToggle') as HTMLInputElement;
+        if (wireframeToggle) wireframeToggle.checked = true;
     }
     
     // Update UI visibility
@@ -199,6 +208,10 @@ async function init(): Promise<void> {
     // Setup event listeners
     setupEventListeners();
 
+    // Ensure buffers are ready before starting render loop
+    // Wait one frame to ensure all WebGPU operations are complete
+    await new Promise(resolve => requestAnimationFrame(resolve));
+
     // Start render loop
     isRunning = true;
     requestAnimationFrame(renderLoop);
@@ -257,6 +270,18 @@ function updateLighting(): void {
     renderer.setLight2Position(light2X, light2Y, light2Z);
 }
 
+function toggleWireframe(): void {
+    const wireframeToggle = document.getElementById('wireframeToggle') as HTMLInputElement;
+    if (wireframeToggle && renderer) {
+        renderer.setWireframeMode(wireframeToggle.checked);
+    }
+}
+
+// Export to window
+if (typeof window !== 'undefined') {
+    (window as any).toggleWireframe = toggleWireframe;
+}
+
 function updateColors(): void {
     const clothR = parseFloat((document.getElementById('clothR') as HTMLInputElement)?.value || '0.9');
     const clothG = parseFloat((document.getElementById('clothG') as HTMLInputElement)?.value || '0.01');
@@ -271,6 +296,16 @@ function updateColors(): void {
 }
 
 function setupUIControls(): void {
+    // Setup wireframe toggle
+    const wireframeToggle = document.getElementById('wireframeToggle') as HTMLInputElement;
+    if (wireframeToggle) {
+        wireframeToggle.addEventListener('change', () => {
+            if (renderer) {
+                renderer.setWireframeMode(wireframeToggle.checked);
+            }
+        });
+    }
+    
     if (window.setupUIControls) {
         window.setupUIControls(
             (id: string, value: number) => {
@@ -443,20 +478,32 @@ function setupEventListeners(): void {
 function renderLoop(): void {
     if (!isRunning) return;
 
-    // Update (both modes have physics now)
-    cloth.update();
-    
-    // Update FPS
-    if (window.updateFPS) {
-        if (cloth instanceof Cloth) {
-            window.updateFPS(cloth.getFPS());
-        } else if (cloth instanceof SimpleCloth) {
-            window.updateFPS(cloth.getFPS());
+    try {
+        // Check if buffers are initialized
+        if (!cloth.getPositionBuffer() || !cloth.getNormalBuffer() || !cloth.getIndexBuffer()) {
+            console.warn('Buffers not ready, skipping frame');
+            requestAnimationFrame(renderLoop);
+            return;
         }
-    }
 
-    // Render
-    renderer.render(cloth, camera);
+        // Update (both modes have physics now)
+        cloth.update();
+        
+        // Update FPS
+        if (window.updateFPS) {
+            if (cloth instanceof Cloth) {
+                window.updateFPS(cloth.getFPS());
+            } else if (cloth instanceof SimpleCloth) {
+                window.updateFPS(cloth.getFPS());
+            }
+        }
+
+        // Render
+        renderer.render(cloth, camera);
+    } catch (error) {
+        console.error('Error in render loop:', error);
+        // Continue render loop even if there's an error
+    }
 
     requestAnimationFrame(renderLoop);
 }

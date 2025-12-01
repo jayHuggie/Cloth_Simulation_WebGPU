@@ -185,7 +185,6 @@
             <div class="collapsible" onclick="toggleCollapse(this)">Cloth Coefficients</div>
             <div class="collapsible-content" id="cloth-coeffs">
                 <label>Number of Particles: <input type="number" id="numParticles" step="1" min="5" max="39" value="25"></label>
-                <div class="info" id="triangleCount" style="margin-top: 10px; margin-bottom: 10px;">Triangles: 1152</div>
                 <label>Mass: <input type="number" id="mass" step="0.1" value="100"></label>
                 <label>Gravity: <input type="number" id="gravity" step="0.1" value="2"></label>
                 <label>Ground: <input type="number" id="ground" step="0.1" value="0"></label>
@@ -196,7 +195,14 @@
         <div class="control-group" id="simple-cloth-controls" style="display: none;">
             <div class="collapsible" onclick="toggleCollapse(this)">Simple Triangle Mesh</div>
             <div class="collapsible-content">
-                <label>Number of Triangles: <input type="number" id="numTriangles" step="2" min="2" max="10000" value="1000"></label>
+                <div class="info" id="triangleCount" style="margin-top: 0px; margin-bottom: 10px;">Triangles: 1152</div>
+                <label>Target Number of Triangles: <input type="number" id="numTriangles" step="2" min="2" max="10000" value="1000"></label>
+                <input type="range" id="numTrianglesSlider" min="2" max="2000" step="2" value="1000" style="width: 100%; margin-top: 5px; margin-bottom: 5px;">
+                <div style="font-size: 11px; color: #999; margin-top: 2px; margin-bottom: 5px;">Note: Will be adjusted to the closest functional actual triangle count</div>
+                <label style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+                    <input type="checkbox" id="wireframeToggle">
+                    <span>Show Wireframe Overlay (Cyan edges on cloth - thick quads)</span>
+                </label>
                 <div style="font-size: 11px; color: #999; margin-top: 5px;">⚠️ Higher values may cause performance issues</div>
             </div>
         </div>
@@ -311,6 +317,12 @@
             }
         };
         
+        window.toggleWireframe = () => {
+            if (window.toggleWireframeFn) {
+                window.toggleWireframeFn();
+            }
+        };
+        
         window.setupUIControls = (updateCloth, updateLighting, updateColors, switchMode) => {
             window.switchModeFn = switchMode;
             
@@ -329,12 +341,29 @@
                                 window.updateTriangleCount(triangleCount);
                             }
                         } else if (id === 'numTriangles') {
+                            // Sync slider with input
+                            const slider = document.getElementById('numTrianglesSlider');
+                            if (slider) {
+                                const clampedValue = Math.max(2, Math.min(2000, Math.round(value)));
+                                slider.value = clampedValue;
+                            }
                             // Triangle count will be updated after recreation
                         }
                         updateCloth(id, value);
                     });
                 }
             });
+            
+            // Add slider for numTriangles
+            const numTrianglesSlider = document.getElementById('numTrianglesSlider');
+            const numTrianglesInput = document.getElementById('numTriangles');
+            if (numTrianglesSlider && numTrianglesInput) {
+                numTrianglesSlider.addEventListener('input', () => {
+                    const value = parseFloat(numTrianglesSlider.value);
+                    numTrianglesInput.value = value;
+                    updateCloth('numTriangles', value);
+                });
+            }
             
             // Lighting controls
             const lightInputs = ['light1R', 'light1G', 'light1B', 'light1X', 'light1Y', 'light1Z',

@@ -28,6 +28,14 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
     // Diffuse reflectance
     let reflectance = irradiance * lighting.diffuseColor;
     
+    // Debug: Force very dark color if diffuseColor is very small (wireframe mode test)
+    // This is a temporary debug to verify the shader is reading the updated value
+    // let testColor = lighting.diffuseColor;
+    // if (testColor.r < 0.3 && testColor.g < 0.01 && testColor.b < 0.01) {
+    //     // Very dark red detected - make it even darker for testing
+    //     reflectance = reflectance * 0.1;
+    // }
+    
     // Gamma correction
     return vec4<f32>(sqrt(reflectance), 1.0);
 }
