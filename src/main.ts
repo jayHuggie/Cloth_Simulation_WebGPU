@@ -3,6 +3,7 @@ import { Renderer } from './Renderer';
 import { Cloth } from './Cloth';
 import { SimpleCloth } from './SimpleCloth';
 import { Ground } from './Ground';
+import { SphericalGround } from './SphericalGround';
 import { Camera } from './Camera';
 import { vec3 } from 'gl-matrix';
 
@@ -77,12 +78,49 @@ function createSimpleCloth(numTriangles: number): SimpleCloth {
     );
 }
 
+function createClothWithSphere(numParticles: number): Cloth {
+    // Create a sphere at the origin with radius 2.0
+    const sphereGround = new SphericalGround([0.0, 0.0, 0.0], 2.0, device);
+    return new Cloth(
+        4.0, // size
+        100.0, // mass
+        numParticles, // N particles
+        [-2.0, 3.8, 0.0], // top left position
+        [1.0, 0.0, 0.0], // horizontal direction
+        [0.0, -1.0, 0.0], // vertical direction
+        device,
+        sphereGround
+    );
+}
+
+function createSimpleClothWithSphere(numTriangles: number): SimpleCloth {
+    // Create a sphere at the origin with radius 2.0
+    const sphereGround = new SphericalGround([0.0, 0.0, 0.0], 2.0, device);
+    return new SimpleCloth(
+        4.0, // size
+        numTriangles, // target number of triangles
+        [-2.0, 3.8, 0.0], // top left position
+        [1.0, 0.0, 0.0], // horizontal direction
+        [0.0, -1.0, 0.0], // vertical direction
+        device,
+        sphereGround
+    );
+}
+
 function recreateCloth(numParticles: number): void {
     const scene = getCurrentScene();
+    const currentGround = scene.cloth ? scene.cloth.getGround() : null;
+    const useSphere = currentGround instanceof SphericalGround;
+    
     if (scene.cloth) {
         scene.cloth.destroy();
     }
-    scene.cloth = createCloth(numParticles);
+    
+    if (useSphere) {
+        scene.cloth = createClothWithSphere(numParticles);
+    } else {
+        scene.cloth = createCloth(numParticles);
+    }
     // Update triangle count display
     const triangleCount = 2 * (numParticles - 1) * (numParticles - 1);
     if (window.updateTriangleCount) {
@@ -92,6 +130,9 @@ function recreateCloth(numParticles: number): void {
 
 function recreateSimpleCloth(numTriangles: number): void {
     const scene = getCurrentScene();
+    const currentGround = scene.cloth ? scene.cloth.getGround() : null;
+    const useSphere = currentGround instanceof SphericalGround;
+    
     if (scene.cloth instanceof SimpleCloth) {
         // Use setNumTriangles if it's already a SimpleCloth (more efficient)
         scene.cloth.setNumTriangles(numTriangles);
@@ -104,7 +145,11 @@ function recreateSimpleCloth(numTriangles: number): void {
         if (scene.cloth) {
             scene.cloth.destroy();
         }
-        scene.cloth = createSimpleCloth(numTriangles);
+        if (useSphere) {
+            scene.cloth = createSimpleClothWithSphere(numTriangles);
+        } else {
+            scene.cloth = createSimpleCloth(numTriangles);
+        }
         if (scene.cloth instanceof SimpleCloth) {
             const actualTriangleCount = scene.cloth.getNumTriangles();
             if (window.updateTriangleCount) {
@@ -124,8 +169,16 @@ function switchMode(mode: ClothMode): void {
         scene.cloth.destroy();
     }
     
+    // Check if current scene uses spherical ground
+    const currentGround = scene.cloth ? scene.cloth.getGround() : null;
+    const useSphere = currentGround instanceof SphericalGround;
+    
     if (mode === 'physics') {
-        scene.cloth = createCloth(25);
+        if (useSphere) {
+            scene.cloth = createClothWithSphere(25);
+        } else {
+            scene.cloth = createCloth(25);
+        }
         const triangleCount = 2 * (25 - 1) * (25 - 1);
         if (window.updateTriangleCount) {
             window.updateTriangleCount(triangleCount);
@@ -140,7 +193,11 @@ function switchMode(mode: ClothMode): void {
         const wireframeToggle = document.getElementById('wireframeToggle') as HTMLInputElement;
         if (wireframeToggle) wireframeToggle.checked = false;
     } else {
-        scene.cloth = createSimpleCloth(1000);
+        if (useSphere) {
+            scene.cloth = createSimpleClothWithSphere(1000);
+        } else {
+            scene.cloth = createSimpleCloth(1000);
+        }
         if (scene.cloth instanceof SimpleCloth) {
             const actualTriangleCount = scene.cloth.getNumTriangles();
             if (window.updateTriangleCount) {
@@ -258,11 +315,11 @@ async function init(): Promise<void> {
     const cloth1 = createCloth(25);
     scenes.push(new Scene(cloth1, camera1, 'physics'));
     
-    // Create Scene 2 (duplicate of Scene 1 for now)
+    // Create Scene 2 (with spherical ground)
     const camera2 = new Camera();
     camera2.setAspect(canvas.width / canvas.height);
     camera2.update();
-    const cloth2 = createCloth(25);
+    const cloth2 = createClothWithSphere(25);
     scenes.push(new Scene(cloth2, camera2, 'physics'));
     
     // Initialize triangle count display

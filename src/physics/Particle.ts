@@ -13,13 +13,17 @@ export class Particle {
     private mass: number;
     private gravityAcce: number;
     private groundPos: number;
+    private sphereCenter: vec3 | null = null;
+    private sphereRadius: number | null = null;
 
     constructor(
         position: vec3,
         normal: vec3,
         mass: number,
         gravityAcce: number,
-        groundPos: number
+        groundPos: number,
+        sphereCenter?: vec3,
+        sphereRadius?: number
     ) {
         this.position = position;
         this.normal = normal;
@@ -29,6 +33,11 @@ export class Particle {
         this.velocity = vec3.create();
         this.force = vec3.create();
         this.prevForce = vec3.create();
+        
+        if (sphereCenter && sphereRadius !== undefined) {
+            this.sphereCenter = sphereCenter;
+            this.sphereRadius = sphereRadius;
+        }
     }
 
     applyForce(f: vec3): void {
@@ -89,10 +98,43 @@ export class Particle {
     }
 
     groundCollision(): void {
-        if (this.position[1] < this.groundPos + EPSILON) {
-            this.position[1] = this.groundPos + EPSILON;
-            this.velocity[1] = 0.0;
+        if (this.sphereCenter && this.sphereRadius !== null) {
+            // Sphere collision
+            const toParticle = vec3.create();
+            vec3.sub(toParticle, this.position, this.sphereCenter);
+            const distance = vec3.length(toParticle);
+            
+            if (distance < this.sphereRadius + EPSILON) {
+                // Push particle to sphere surface
+                vec3.normalize(toParticle, toParticle);
+                vec3.scaleAndAdd(this.position, this.sphereCenter, toParticle, this.sphereRadius + EPSILON);
+                
+                // Remove velocity component toward sphere center
+                const normal = vec3.clone(toParticle);
+                const velDotNormal = vec3.dot(this.velocity, normal);
+                if (velDotNormal < 0) {
+                    const correction = vec3.create();
+                    vec3.scale(correction, normal, velDotNormal);
+                    vec3.sub(this.velocity, this.velocity, correction);
+                }
+            }
+        } else {
+            // Plane collision (original behavior)
+            if (this.position[1] < this.groundPos + EPSILON) {
+                this.position[1] = this.groundPos + EPSILON;
+                this.velocity[1] = 0.0;
+            }
         }
+    }
+    
+    setSphereCollision(center: vec3, radius: number): void {
+        this.sphereCenter = center;
+        this.sphereRadius = radius;
+    }
+    
+    clearSphereCollision(): void {
+        this.sphereCenter = null;
+        this.sphereRadius = null;
     }
 
     setFixed(fixed: boolean): void {

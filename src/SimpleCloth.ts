@@ -3,6 +3,7 @@ import { Particle } from './physics/Particle';
 import { SpringDamper } from './physics/SpringDamper';
 import { Triangle } from './physics/Triangle';
 import { Ground } from './Ground';
+import { SphericalGround } from './SphericalGround';
 import { identity } from './utils/math';
 
 const EPSILON = 1e-6;
@@ -39,7 +40,8 @@ export class SimpleCloth {
     private gravityAcce: number = 2.0;
     private groundPos: number = 0.0;
 
-    private ground: Ground;
+    private ground: Ground | SphericalGround;
+    private isSphericalGround: boolean = false;
 
     // Timing
     private prevT: number = 0;
@@ -68,7 +70,7 @@ export class SimpleCloth {
         hori: vec3,
         vert: vec3,
         device: GPUDevice,
-        ground: Ground
+        ground: Ground | SphericalGround
     ) {
         this.size = size;
         this.mass = 100.0;
@@ -80,6 +82,7 @@ export class SimpleCloth {
         vec3.normalize(this.vertDir, vert);
         this.device = device;
         this.ground = ground;
+        this.isSphericalGround = ground instanceof SphericalGround;
 
         this.initialize();
         this.prevT = performance.now();
@@ -130,13 +133,27 @@ export class SimpleCloth {
                     this.normals[i] = [...norm];
                 }
 
-                const particle = new Particle(
-                    this.positions[i],
-                    this.normals[i],
-                    this.particleMass,
-                    this.gravityAcce,
-                    this.groundPos
-                );
+                let particle: Particle;
+                if (this.isSphericalGround) {
+                    const sphereGround = this.ground as SphericalGround;
+                    particle = new Particle(
+                        this.positions[i],
+                        this.normals[i],
+                        this.particleMass,
+                        this.gravityAcce,
+                        this.groundPos,
+                        sphereGround.getCenter(),
+                        sphereGround.getRadius()
+                    );
+                } else {
+                    particle = new Particle(
+                        this.positions[i],
+                        this.normals[i],
+                        this.particleMass,
+                        this.gravityAcce,
+                        this.groundPos
+                    );
+                }
                 this.particles.push(particle);
             }
         }
@@ -689,7 +706,7 @@ export class SimpleCloth {
         };
     }
 
-    getGround(): Ground {
+    getGround(): Ground | SphericalGround {
         return this.ground;
     }
 
