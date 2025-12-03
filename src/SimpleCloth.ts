@@ -85,7 +85,7 @@ export class SimpleCloth {
         this.isSphericalGround = ground instanceof SphericalGround;
 
         this.initialize();
-        this.prevT = performance.now();
+        this.prevT = 0; // Set to 0 so first frame is skipped
     }
 
     private initialize(): void {
@@ -661,6 +661,24 @@ export class SimpleCloth {
 
     getFPS(): number {
         return this.fps;
+    }
+
+    getGround(): Ground | SphericalGround {
+        return this.ground;
+    }
+
+    // Reset timing to prevent huge deltaT when scene is switched to
+    resetTiming(): void {
+        this.prevT = 0;
+        this.fpsCount = 0;
+        this.interval = 0;
+        
+        // Also reset all particle velocities and forces for a calm start
+        for (const particle of this.particles) {
+            const vel = particle.getVelocity();
+            vec3.zero(vel);
+            particle.resetForce();
+        }
     }
 
     getModelMatrix(): mat4 {

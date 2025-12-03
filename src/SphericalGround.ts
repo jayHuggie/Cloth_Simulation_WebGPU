@@ -20,7 +20,8 @@ export class SphericalGround {
     constructor(center: vec3, radius: number, device: GPUDevice, segments: number = 32) {
         this.center = center;
         this.radius = radius;
-        this.model = translate(center);
+        // Use identity matrix since vertex positions already include center offset
+        this.model = identity();
 
         // Generate sphere mesh
         this.generateSphere(segments);

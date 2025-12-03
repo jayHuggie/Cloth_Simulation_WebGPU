@@ -79,13 +79,13 @@ function createSimpleCloth(numTriangles: number): SimpleCloth {
 }
 
 function createClothWithSphere(numParticles: number): Cloth {
-    // Create a sphere at the origin with radius 2.0
+    // Create a sphere at the origin with radius 2.0 (top at y=2.0, bottom at y=-2.0)
     const sphereGround = new SphericalGround([0.0, 0.0, 0.0], 2.0, device);
     return new Cloth(
         4.0, // size
         100.0, // mass
         numParticles, // N particles
-        [-2.0, 3.8, 0.0], // top left position
+        [-2.0, 6.2, 0.0], // top left position - cloth goes from Y=6.2 to Y=2.2 (just above sphere top at Y=2)
         [1.0, 0.0, 0.0], // horizontal direction
         [0.0, -1.0, 0.0], // vertical direction
         device,
@@ -94,12 +94,12 @@ function createClothWithSphere(numParticles: number): Cloth {
 }
 
 function createSimpleClothWithSphere(numTriangles: number): SimpleCloth {
-    // Create a sphere at the origin with radius 2.0
+    // Create a sphere at the origin with radius 2.0 (top at y=2.0, bottom at y=-2.0)
     const sphereGround = new SphericalGround([0.0, 0.0, 0.0], 2.0, device);
     return new SimpleCloth(
         4.0, // size
         numTriangles, // target number of triangles
-        [-2.0, 3.8, 0.0], // top left position
+        [-2.0, 6.2, 0.0], // top left position - cloth goes from Y=6.2 to Y=2.2 (just above sphere top at Y=2)
         [1.0, 0.0, 0.0], // horizontal direction
         [0.0, -1.0, 0.0], // vertical direction
         device,
@@ -251,28 +251,47 @@ function switchScene(sceneIndex: number): void {
     currentSceneIndex = sceneIndex;
     const scene = getCurrentScene();
     
+    // For Scene 2 (spherical ground), recreate the cloth fresh each time
+    // This ensures a clean state without accumulated physics artifacts
+    if (sceneIndex === 1) {
+        // Destroy old cloth
+        scene.cloth.destroy();
+        // Create new cloth with sphere
+        scene.cloth = createClothWithSphere(25);
+    } else {
+        // For Scene 1, just reset timing
+        if (scene.cloth instanceof Cloth) {
+            scene.cloth.resetTiming();
+        } else if (scene.cloth instanceof SimpleCloth) {
+            scene.cloth.resetTiming();
+        }
+    }
+    
     // Update UI to reflect current scene's state
     updateUIVisibility();
+    
+    // Update mode radio buttons
+    const modePhysics = document.getElementById('modePhysics') as HTMLInputElement;
+    const modeSimple = document.getElementById('modeSimple') as HTMLInputElement;
+    if (modePhysics && modeSimple) {
+        modePhysics.checked = scene.mode === 'physics';
+        modeSimple.checked = scene.mode === 'simple';
+    }
     
     // Update camera aspect ratio
     scene.camera.setAspect(canvas.width / canvas.height);
     scene.camera.update();
     
     // Update triangle count display
-    if (scene.mode === 'physics') {
-        if (scene.cloth instanceof Cloth) {
-            const numParticles = scene.cloth.getNumParticles();
-            const triangleCount = 2 * (numParticles - 1) * (numParticles - 1);
-            if (window.updateTriangleCount) {
-                window.updateTriangleCount(triangleCount);
-            }
+    if (scene.cloth instanceof Cloth) {
+        const triangleCount = scene.cloth.getIndexCount() / 3;
+        if (window.updateTriangleCount) {
+            window.updateTriangleCount(triangleCount);
         }
-    } else {
-        if (scene.cloth instanceof SimpleCloth) {
-            const actualTriangleCount = scene.cloth.getNumTriangles();
-            if (window.updateTriangleCount) {
-                window.updateTriangleCount(actualTriangleCount);
-            }
+    } else if (scene.cloth instanceof SimpleCloth) {
+        const actualTriangleCount = scene.cloth.getNumTriangles();
+        if (window.updateTriangleCount) {
+            window.updateTriangleCount(actualTriangleCount);
         }
     }
 }
