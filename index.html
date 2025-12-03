@@ -134,6 +134,18 @@
 <body>
     <canvas id="canvas"></canvas>
     <div id="ui">
+        <div class="control-group" style="margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 15px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                    <input type="radio" name="scene" id="scene1" value="1" checked onchange="switchScene(1)">
+                    <span>Scene 1</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                    <input type="radio" name="scene" id="scene2" value="2" onchange="switchScene(2)">
+                    <span>Scene 2</span>
+                </label>
+            </div>
+        </div>
         <h2>Cloth Simulation Controls</h2>
         <div class="info" id="fps">FPS: 0</div>
         
