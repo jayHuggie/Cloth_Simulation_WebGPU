@@ -72,5 +72,13 @@ export class SpringDamper {
         vec3.negate(oppositeForce, totalForce);
         this.p2.applyForce(oppositeForce);
     }
+    
+    setSpringConst(k: number): void {
+        this.springConst = k;
+    }
+    
+    setDampingConst(c: number): void {
+        this.dampingConst = c;
+    }
 }
 

@@ -47,6 +47,10 @@ export class Cloth {
     private interval: number = 0;
     private fpsCount: number = 0;
     private fps: number = 0;
+    
+    // Drop control for Scene 2
+    private isDropped: boolean = false;
+    private initialPositions: vec3[] = [];
 
     // WebGPU buffers
     private positionBuffer: GPUBuffer | null = null;
@@ -265,9 +269,66 @@ export class Cloth {
             this.particles[i].setFixed(true);
         }
 
+        // Store initial positions for reset functionality
+        this.storeInitialPositions();
+
         // Create WebGPU buffers
         this.createBuffers();
         this.createEdgeBuffers();
+    }
+    
+    private storeInitialPositions(): void {
+        this.initialPositions = [];
+        for (const particle of this.particles) {
+            const pos = particle.getPosition();
+            this.initialPositions.push(vec3.clone(pos));
+        }
+    }
+    
+    resetToInitialState(): void {
+        // Reset all particles to initial positions
+        for (let i = 0; i < this.particles.length; i++) {
+            const particle = this.particles[i];
+            const initialPos = this.initialPositions[i];
+            const currentPos = particle.getPosition();
+            vec3.copy(currentPos, initialPos);
+            
+            // Reset velocity
+            const vel = particle.getVelocity();
+            vec3.zero(vel);
+            
+            // Reset force
+            particle.resetForce();
+        }
+        
+        // Re-fix top row particles
+        for (const idx of this.fixedParticleIdx) {
+            this.particles[idx].setFixed(true);
+        }
+        
+        // Reset timing
+        this.prevT = 0;
+        this.isDropped = false;
+        
+        // Update buffers
+        this.updateBuffers();
+    }
+    
+    drop(): void {
+        this.isDropped = true;
+        // Release fixed particles (top row) to allow dropping
+        for (const idx of this.fixedParticleIdx) {
+            this.particles[idx].setFixed(false);
+        }
+    }
+    
+    enablePhysics(): void {
+        // Enable physics simulation while keeping top row fixed (for Scene 1)
+        this.isDropped = true;
+    }
+    
+    isClothDropped(): boolean {
+        return this.isDropped;
     }
 
     // Store edge pairs for wireframe generation
@@ -519,6 +580,14 @@ export class Cloth {
     update(): void {
         const currT = performance.now();
         this.fpsCount++;
+        
+        // If not dropped yet, don't update physics
+        if (!this.isDropped) {
+            if (this.prevT === 0) {
+                this.prevT = currT;
+            }
+            return;
+        }
         
         // Handle first frame - if prevT is 0, skip physics update
         if (this.prevT === 0) {

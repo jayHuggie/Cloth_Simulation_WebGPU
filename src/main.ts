@@ -85,9 +85,9 @@ function createClothWithSphere(numParticles: number): Cloth {
         4.0, // size
         100.0, // mass
         numParticles, // N particles
-        [-2.0, 6.2, 0.0], // top left position - cloth goes from Y=6.2 to Y=2.2 (just above sphere top at Y=2)
-        [1.0, 0.0, 0.0], // horizontal direction
-        [0.0, -1.0, 0.0], // vertical direction
+        [-2.0, 4.0, 2.0], // top left position - cloth is horizontal, centered above sphere at Y=4.0, Z goes from 2.0 to -2.0
+        [1.0, 0.0, 0.0], // horizontal direction (moves in +X)
+        [0.0, 0.0, -1.0], // vertical direction (moves in -Z, making cloth horizontal/parallel to sphere)
         device,
         sphereGround
     );
@@ -99,9 +99,9 @@ function createSimpleClothWithSphere(numTriangles: number): SimpleCloth {
     return new SimpleCloth(
         4.0, // size
         numTriangles, // target number of triangles
-        [-2.0, 6.2, 0.0], // top left position - cloth goes from Y=6.2 to Y=2.2 (just above sphere top at Y=2)
-        [1.0, 0.0, 0.0], // horizontal direction
-        [0.0, -1.0, 0.0], // vertical direction
+        [-2.0, 4.0, 2.0], // top left position - cloth is horizontal, centered above sphere at Y=4.0, Z goes from 2.0 to -2.0
+        [1.0, 0.0, 0.0], // horizontal direction (moves in +X)
+        [0.0, 0.0, -1.0], // vertical direction (moves in -Z, making cloth horizontal/parallel to sphere)
         device,
         sphereGround
     );
@@ -118,8 +118,15 @@ function recreateCloth(numParticles: number): void {
     
     if (useSphere) {
         scene.cloth = createClothWithSphere(numParticles);
+        // Apply gentle gravity settings for Scene 2
+        scene.cloth.setGravityAcce(0.8);
+        scene.cloth.setFluidDensity(3.0);
+        scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
+        scene.cloth.setDampingConst(15.0);
+        // Cloth does not start dropped - user clicks "Drop!" button
     } else {
         scene.cloth = createCloth(numParticles);
+        scene.cloth.enablePhysics(); // Scene 1 starts with physics running, but top row stays fixed
     }
     // Update triangle count display
     const triangleCount = 2 * (numParticles - 1) * (numParticles - 1);
@@ -147,8 +154,15 @@ function recreateSimpleCloth(numTriangles: number): void {
         }
         if (useSphere) {
             scene.cloth = createSimpleClothWithSphere(numTriangles);
+            // Apply gentle gravity settings for Scene 2
+            scene.cloth.setGravityAcce(0.8);
+            scene.cloth.setFluidDensity(3.0);
+            scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
+            scene.cloth.setDampingConst(15.0);
+            // Cloth does not start dropped - user clicks "Drop!" button
         } else {
             scene.cloth = createSimpleCloth(numTriangles);
+            scene.cloth.enablePhysics(); // Scene 1 starts with physics running, but top row stays fixed
         }
         if (scene.cloth instanceof SimpleCloth) {
             const actualTriangleCount = scene.cloth.getNumTriangles();
@@ -176,8 +190,15 @@ function switchMode(mode: ClothMode): void {
     if (mode === 'physics') {
         if (useSphere) {
             scene.cloth = createClothWithSphere(25);
+            // Apply gentle gravity settings for Scene 2
+            scene.cloth.setGravityAcce(0.8);
+            scene.cloth.setFluidDensity(3.0);
+            scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
+            scene.cloth.setDampingConst(15.0);
+            // Cloth does not start dropped - user clicks "Drop!" button
         } else {
             scene.cloth = createCloth(25);
+            scene.cloth.enablePhysics(); // Scene 1 starts with physics running, but top row stays fixed
         }
         const triangleCount = 2 * (25 - 1) * (25 - 1);
         if (window.updateTriangleCount) {
@@ -195,8 +216,15 @@ function switchMode(mode: ClothMode): void {
     } else {
         if (useSphere) {
             scene.cloth = createSimpleClothWithSphere(1000);
+            // Apply gentle gravity settings for Scene 2
+            scene.cloth.setGravityAcce(0.8);
+            scene.cloth.setFluidDensity(3.0);
+            scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
+            scene.cloth.setDampingConst(15.0);
+            // Cloth does not start dropped - user clicks "Drop!" button
         } else {
             scene.cloth = createSimpleCloth(1000);
+            scene.cloth.enablePhysics(); // Scene 1 starts with physics running, but top row stays fixed
         }
         if (scene.cloth instanceof SimpleCloth) {
             const actualTriangleCount = scene.cloth.getNumTriangles();
@@ -258,6 +286,12 @@ function switchScene(sceneIndex: number): void {
         scene.cloth.destroy();
         // Create new cloth with sphere
         scene.cloth = createClothWithSphere(25);
+        // Apply gentle gravity settings for Scene 2
+        scene.cloth.setGravityAcce(0.8);
+        scene.cloth.setFluidDensity(3.0);
+        scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
+        scene.cloth.setDampingConst(15.0);
+        // Cloth does not start dropped - user clicks "Drop!" button
     } else {
         // For Scene 1, just reset timing
         if (scene.cloth instanceof Cloth) {
@@ -276,6 +310,12 @@ function switchScene(sceneIndex: number): void {
     if (modePhysics && modeSimple) {
         modePhysics.checked = scene.mode === 'physics';
         modeSimple.checked = scene.mode === 'simple';
+    }
+    
+    // Show/hide Scene 2 specific controls (Before Drop / Drop!)
+    const scene2Controls = document.getElementById('scene2Controls');
+    if (scene2Controls) {
+        scene2Controls.style.display = sceneIndex === 1 ? 'block' : 'none';
     }
     
     // Update camera aspect ratio
@@ -332,6 +372,7 @@ async function init(): Promise<void> {
     camera1.setAspect(canvas.width / canvas.height);
     camera1.update();
     const cloth1 = createCloth(25);
+    cloth1.enablePhysics(); // Scene 1 starts with physics running, but top row stays fixed
     scenes.push(new Scene(cloth1, camera1, 'physics'));
     
     // Create Scene 2 (with spherical ground)
@@ -339,6 +380,12 @@ async function init(): Promise<void> {
     camera2.setAspect(canvas.width / canvas.height);
     camera2.update();
     const cloth2 = createClothWithSphere(25);
+    // Apply gentle gravity settings for Scene 2
+    cloth2.setGravityAcce(0.8);
+    cloth2.setFluidDensity(3.0);
+    cloth2.setWindVelocity([0.0, 0.0, 0.0]);
+    cloth2.setDampingConst(15.0);
+    // Cloth does not start dropped - user clicks "Drop!" button
     scenes.push(new Scene(cloth2, camera2, 'physics'));
     
     // Initialize triangle count display
@@ -674,6 +721,24 @@ if (typeof window !== 'undefined') {
     (window as any).switchScene = (sceneIndex: number) => {
         // Convert from 1-based (UI) to 0-based (array)
         switchScene(sceneIndex - 1);
+    };
+    
+    (window as any).resetClothToInitial = () => {
+        const scene = getCurrentScene();
+        if (scene.cloth instanceof Cloth) {
+            scene.cloth.resetToInitialState();
+        } else if (scene.cloth instanceof SimpleCloth) {
+            scene.cloth.resetToInitialState();
+        }
+    };
+    
+    (window as any).dropCloth = () => {
+        const scene = getCurrentScene();
+        if (scene.cloth instanceof Cloth) {
+            scene.cloth.drop();
+        } else if (scene.cloth instanceof SimpleCloth) {
+            scene.cloth.drop();
+        }
     };
 }
 
