@@ -152,6 +152,12 @@ export class SphericalGround {
         return this.radius;
     }
 
+    setGroundLevel(level: number): void {
+        // For spherical ground, ground level doesn't apply in the same way
+        // This method exists for interface compatibility with Ground
+        // The sphere's collision is based on center and radius, not a ground level
+    }
+
     destroy(): void {
         // Buffers will be garbage collected, but we could explicitly destroy them if needed
     }

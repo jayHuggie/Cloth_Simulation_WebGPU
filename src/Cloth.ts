@@ -160,6 +160,27 @@ export class Cloth {
             }
         }
 
+        // Push particles outside sphere BEFORE creating springs (if spherical ground)
+        // This ensures springs are created with correct rest lengths
+        if (this.isSphericalGround) {
+            const sphereGround = this.ground as SphericalGround;
+            const sphereCenter = sphereGround.getCenter();
+            const sphereRadius = sphereGround.getRadius();
+            
+            for (const particle of this.particles) {
+                const pos = particle.getPosition();
+                const toParticle = vec3.create();
+                vec3.sub(toParticle, pos, sphereCenter);
+                const distance = vec3.length(toParticle);
+                
+                if (distance < sphereRadius + EPSILON) {
+                    // Push particle to sphere surface
+                    vec3.normalize(toParticle, toParticle);
+                    vec3.scaleAndAdd(pos, sphereCenter, toParticle, sphereRadius + EPSILON);
+                }
+            }
+        }
+
         // Create triangles
         for (let y = 0; y < this.numOfParticles - 1; y++) {
             for (let x = 0; x < this.numOfParticles - 1; x++) {
@@ -194,6 +215,8 @@ export class Cloth {
         }
 
         // Create spring dampers
+        // For sphere ground, use actual distances (after adjustment)
+        // For flat ground, use theoretical rest lengths (more precise for perfect grid)
         for (let y = 0; y < this.numOfParticles - 1; y++) {
             for (let x = 0; x < this.numOfParticles - 1; x++) {
                 const topLeftIdx = x + y * this.numOfParticles;
@@ -201,13 +224,34 @@ export class Cloth {
                 const bottomLeftIdx = topLeftIdx + this.numOfParticles;
                 const bottomRightIdx = bottomLeftIdx + 1;
 
+                let restLen1: number, restLen2: number, restLen3: number, restLen4: number;
+                
+                if (this.isSphericalGround) {
+                    // Use actual distances after sphere adjustment
+                    const p1 = this.particles[topLeftIdx].getPosition();
+                    const p2 = this.particles[topRightIdx].getPosition();
+                    const p3 = this.particles[bottomLeftIdx].getPosition();
+                    const p4 = this.particles[bottomRightIdx].getPosition();
+                    
+                    restLen1 = vec3.distance(p1, p2);
+                    restLen2 = vec3.distance(p1, p3);
+                    restLen3 = vec3.distance(p1, p4);
+                    restLen4 = vec3.distance(p3, p2);
+                } else {
+                    // Use theoretical rest lengths for perfect grid (more precise)
+                    restLen1 = this.restLength;
+                    restLen2 = this.restLength;
+                    restLen3 = this.restLengthDiag;
+                    restLen4 = this.restLengthDiag;
+                }
+
                 this.connections.push(
                     new SpringDamper(
                         this.particles[topLeftIdx],
                         this.particles[topRightIdx],
                         this.springConst,
                         this.dampingConst,
-                        this.restLength
+                        restLen1
                     )
                 );
                 this.connections.push(
@@ -216,7 +260,7 @@ export class Cloth {
                         this.particles[bottomRightIdx],
                         this.springConst,
                         this.dampingConst,
-                        this.restLengthDiag
+                        restLen3
                     )
                 );
                 this.connections.push(
@@ -225,7 +269,7 @@ export class Cloth {
                         this.particles[bottomLeftIdx],
                         this.springConst,
                         this.dampingConst,
-                        this.restLength
+                        restLen2
                     )
                 );
                 this.connections.push(
@@ -234,29 +278,35 @@ export class Cloth {
                         this.particles[topRightIdx],
                         this.springConst,
                         this.dampingConst,
-                        this.restLengthDiag
+                        restLen4
                     )
                 );
 
                 if (x === this.numOfParticles - 2) {
+                    const restLen5 = this.isSphericalGround 
+                        ? vec3.distance(this.particles[topRightIdx].getPosition(), this.particles[bottomRightIdx].getPosition())
+                        : this.restLength;
                     this.connections.push(
                         new SpringDamper(
                             this.particles[topRightIdx],
                             this.particles[bottomRightIdx],
                             this.springConst,
                             this.dampingConst,
-                            this.restLength
+                            restLen5
                         )
                     );
                 }
                 if (y === this.numOfParticles - 2) {
+                    const restLen6 = this.isSphericalGround
+                        ? vec3.distance(this.particles[bottomLeftIdx].getPosition(), this.particles[bottomRightIdx].getPosition())
+                        : this.restLength;
                     this.connections.push(
                         new SpringDamper(
                             this.particles[bottomLeftIdx],
                             this.particles[bottomRightIdx],
                             this.springConst,
                             this.dampingConst,
-                            this.restLength
+                            restLen6
                         )
                     );
                 }
@@ -320,6 +370,8 @@ export class Cloth {
         for (const idx of this.fixedParticleIdx) {
             this.particles[idx].setFixed(false);
         }
+        // Update buffers to ensure they're in sync when dropping starts
+        this.updateBuffers();
     }
     
     enablePhysics(): void {
@@ -783,6 +835,10 @@ export class Cloth {
 
     setSpringConst(k: number): void {
         this.springConst = Math.abs(k);
+        // Update all existing springs
+        for (const spring of this.connections) {
+            spring.setSpringConst(this.springConst);
+        }
     }
 
     getSpringConst(): number {
@@ -791,6 +847,10 @@ export class Cloth {
 
     setDampingConst(c: number): void {
         this.dampingConst = Math.abs(c);
+        // Update all existing springs
+        for (const spring of this.connections) {
+            spring.setDampingConst(this.dampingConst);
+        }
     }
 
     getDampingConst(): number {

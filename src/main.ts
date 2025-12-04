@@ -159,6 +159,7 @@ function recreateSimpleCloth(numTriangles: number): void {
             scene.cloth.setFluidDensity(3.0);
             scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
             scene.cloth.setDampingConst(15.0);
+            scene.cloth.setSpringConst(100.0); // Lower default for simple mode to avoid stretching
             // Cloth does not start dropped - user clicks "Drop!" button
         } else {
             scene.cloth = createSimpleCloth(numTriangles);
@@ -221,6 +222,7 @@ function switchMode(mode: ClothMode): void {
             scene.cloth.setFluidDensity(3.0);
             scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
             scene.cloth.setDampingConst(15.0);
+            scene.cloth.setSpringConst(100.0); // Lower default for simple mode to avoid stretching
             // Cloth does not start dropped - user clicks "Drop!" button
         } else {
             scene.cloth = createSimpleCloth(1000);
