@@ -69,11 +69,45 @@ export class Particle {
             
             const deltaP = vec3.create();
             vec3.scale(deltaP, this.velocity, deltaTime);
+            
+            // Continuous collision detection: check if movement would cause penetration
+            const newPos = vec3.create();
+            vec3.add(newPos, this.position, deltaP);
+            
+            // Check collision before moving to prevent penetration
+            if (this.sphereCenter && this.sphereRadius !== null) {
+                const toNewPos = vec3.create();
+                vec3.sub(toNewPos, newPos, this.sphereCenter);
+                const newDistance = vec3.length(toNewPos);
+                
+                if (newDistance < this.sphereRadius + COLLISION_MARGIN) {
+                    // Clamp movement to prevent penetration
+                    vec3.normalize(toNewPos, toNewPos);
+                    vec3.scaleAndAdd(newPos, this.sphereCenter, toNewPos, this.sphereRadius + COLLISION_MARGIN);
+                    
+                    // Update deltaP to the clamped movement
+                    vec3.sub(deltaP, newPos, this.position);
+                    
+                    // Strongly dampen velocity toward sphere
+                    const normal = vec3.clone(toNewPos);
+                    const velDotNormal = vec3.dot(this.velocity, normal);
+                    if (velDotNormal < 0) {
+                        // Remove all velocity toward sphere and add a small push away
+                        const correction = vec3.create();
+                        vec3.scale(correction, normal, velDotNormal);
+                        vec3.sub(this.velocity, this.velocity, correction);
+                        // Add small push-away velocity to prevent sticking
+                        vec3.scaleAndAdd(this.velocity, this.velocity, normal, 0.1);
+                    }
+                }
+            }
+            
             vec3.add(this.position, this.position, deltaP);
             
             vec3.copy(this.prevForce, this.force);
         }
         
+        // Final collision check and correction (safety net)
         this.groundCollision();
         vec3.zero(this.force);
     }
@@ -100,30 +134,41 @@ export class Particle {
 
     groundCollision(): void {
         if (this.sphereCenter && this.sphereRadius !== null) {
-            // Sphere collision
+            // Sphere collision - safety net for any particles that still penetrate
             const toParticle = vec3.create();
             vec3.sub(toParticle, this.position, this.sphereCenter);
             const distance = vec3.length(toParticle);
             
             if (distance < this.sphereRadius + COLLISION_MARGIN) {
                 // Push particle to sphere surface with margin
-                vec3.normalize(toParticle, toParticle);
+                if (distance < EPSILON) {
+                    // Handle case where particle is at sphere center (shouldn't happen, but safety)
+                    vec3.set(toParticle, 0, 1, 0);
+                } else {
+                    vec3.normalize(toParticle, toParticle);
+                }
                 vec3.scaleAndAdd(this.position, this.sphereCenter, toParticle, this.sphereRadius + COLLISION_MARGIN);
                 
-                // Remove velocity component toward sphere center
+                // Strongly remove velocity component toward sphere center
                 const normal = vec3.clone(toParticle);
                 const velDotNormal = vec3.dot(this.velocity, normal);
                 if (velDotNormal < 0) {
+                    // Remove all velocity toward sphere
                     const correction = vec3.create();
                     vec3.scale(correction, normal, velDotNormal);
                     vec3.sub(this.velocity, this.velocity, correction);
+                    // Add push-away velocity to prevent sticking
+                    vec3.scaleAndAdd(this.velocity, this.velocity, normal, 0.05);
                 }
             }
         } else {
             // Plane collision (original behavior)
             if (this.position[1] < this.groundPos + COLLISION_MARGIN) {
                 this.position[1] = this.groundPos + COLLISION_MARGIN;
-                this.velocity[1] = 0.0;
+                // Dampen downward velocity
+                if (this.velocity[1] < 0) {
+                    this.velocity[1] = 0.0;
+                }
             }
         }
     }

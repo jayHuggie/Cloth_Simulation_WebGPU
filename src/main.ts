@@ -147,6 +147,21 @@ function recreateSimpleCloth(numTriangles: number): void {
         if (window.updateTriangleCount) {
             window.updateTriangleCount(actualTriangleCount);
         }
+        
+        // Reset to initial state for Scene 2 (spherical ground)
+        // This ensures cloth goes back to top initial state (parallel to sphere) when triangle count changes
+        if (useSphere) {
+            scene.cloth.resetToInitialState();
+            // Apply gentle gravity settings for Scene 2
+            scene.cloth.setGravityAcce(0.8);
+            scene.cloth.setFluidDensity(3.0);
+            scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
+            scene.cloth.setDampingConst(15.0);
+            scene.cloth.setSpringConst(100.0); // Lower default for simple mode to avoid stretching
+        } else {
+            // Scene 1: enable physics with top row fixed
+            scene.cloth.enablePhysics();
+        }
     } else {
         // Need to recreate if it's a different type
         if (scene.cloth) {
