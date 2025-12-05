@@ -1,6 +1,7 @@
 import { vec3 } from 'gl-matrix';
 
 const EPSILON = 1e-6;
+const COLLISION_MARGIN = 0.02; // Visual margin to keep cloth above surface
 
 export class Particle {
     public position: vec3;
@@ -104,10 +105,10 @@ export class Particle {
             vec3.sub(toParticle, this.position, this.sphereCenter);
             const distance = vec3.length(toParticle);
             
-            if (distance < this.sphereRadius + EPSILON) {
-                // Push particle to sphere surface
+            if (distance < this.sphereRadius + COLLISION_MARGIN) {
+                // Push particle to sphere surface with margin
                 vec3.normalize(toParticle, toParticle);
-                vec3.scaleAndAdd(this.position, this.sphereCenter, toParticle, this.sphereRadius + EPSILON);
+                vec3.scaleAndAdd(this.position, this.sphereCenter, toParticle, this.sphereRadius + COLLISION_MARGIN);
                 
                 // Remove velocity component toward sphere center
                 const normal = vec3.clone(toParticle);
@@ -120,8 +121,8 @@ export class Particle {
             }
         } else {
             // Plane collision (original behavior)
-            if (this.position[1] < this.groundPos + EPSILON) {
-                this.position[1] = this.groundPos + EPSILON;
+            if (this.position[1] < this.groundPos + COLLISION_MARGIN) {
+                this.position[1] = this.groundPos + COLLISION_MARGIN;
                 this.velocity[1] = 0.0;
             }
         }
