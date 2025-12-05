@@ -37,6 +37,66 @@ let rightMouseDown: boolean = false;
 let mouseX: number = 0;
 let mouseY: number = 0;
 
+// Helpers to pull current UI values (with safe fallbacks)
+function getGravityInputValue(): number {
+    const gravityInput = document.getElementById('gravity') as HTMLInputElement | null;
+    if (gravityInput) {
+        const val = parseFloat(gravityInput.value);
+        if (!Number.isNaN(val) && Number.isFinite(val)) return val;
+    }
+    return 0.8;
+}
+
+function getMassInputValue(): number {
+    const massInput = document.getElementById('mass') as HTMLInputElement | null;
+    if (massInput) {
+        const val = parseFloat(massInput.value);
+        if (!Number.isNaN(val) && Number.isFinite(val)) return val;
+    }
+    return 100.0;
+}
+
+function getSpringConstInputValue(): number {
+    const springInput = document.getElementById('springConst') as HTMLInputElement | null;
+    if (springInput) {
+        const val = parseFloat(springInput.value);
+        if (!Number.isNaN(val) && Number.isFinite(val)) return val;
+    }
+    return 1000.0;
+}
+
+function getDampingConstInputValue(): number {
+    const dampingInput = document.getElementById('dampingConst') as HTMLInputElement | null;
+    if (dampingInput) {
+        const val = parseFloat(dampingInput.value);
+        if (!Number.isNaN(val) && Number.isFinite(val)) return val;
+    }
+    return 3.5;
+}
+
+function getFluidDensityInputValue(): number {
+    const fluidInput = document.getElementById('fluidDensity') as HTMLInputElement | null;
+    if (fluidInput) {
+        const val = parseFloat(fluidInput.value);
+        if (!Number.isNaN(val) && Number.isFinite(val)) return val;
+    }
+    return 1.225;
+}
+
+function getWindVelocityInputValue(): vec3 {
+    const wx = document.getElementById('windX') as HTMLInputElement | null;
+    const wy = document.getElementById('windY') as HTMLInputElement | null;
+    const wz = document.getElementById('windZ') as HTMLInputElement | null;
+    const vx = wx ? parseFloat(wx.value) : 0.5;
+    const vy = wy ? parseFloat(wy.value) : 0.5;
+    const vz = wz ? parseFloat(wz.value) : -2.5;
+    return [
+        Number.isFinite(vx) ? vx : 0.5,
+        Number.isFinite(vy) ? vy : 0.5,
+        Number.isFinite(vz) ? vz : -2.5,
+    ];
+}
+
 // Scene management
 let scenes: Scene[] = [];
 let currentSceneIndex: number = 0;
@@ -118,15 +178,23 @@ function recreateCloth(numParticles: number): void {
     
     if (useSphere) {
         scene.cloth = createClothWithSphere(numParticles);
-        // Apply gentle gravity settings for Scene 2
-        scene.cloth.setGravityAcce(0.8);
-        scene.cloth.setFluidDensity(3.0);
-        scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
-        scene.cloth.setDampingConst(15.0);
+        // Apply current UI settings for Scene 2
+        scene.cloth.setGravityAcce(getGravityInputValue());
+        scene.cloth.setFluidDensity(getFluidDensityInputValue());
+        scene.cloth.setWindVelocity(getWindVelocityInputValue());
+        scene.cloth.setDampingConst(getDampingConstInputValue());
+        scene.cloth.setSpringConst(getSpringConstInputValue());
+        scene.cloth.setMass(getMassInputValue());
         // Cloth does not start dropped - user clicks "Drop!" button
     } else {
         scene.cloth = createCloth(numParticles);
         scene.cloth.enablePhysics(); // Scene 1 starts with physics running, but top row stays fixed
+        scene.cloth.setGravityAcce(getGravityInputValue());
+        scene.cloth.setFluidDensity(getFluidDensityInputValue());
+        scene.cloth.setWindVelocity(getWindVelocityInputValue());
+        scene.cloth.setDampingConst(getDampingConstInputValue());
+        scene.cloth.setSpringConst(getSpringConstInputValue());
+        scene.cloth.setMass(getMassInputValue());
     }
     // Update triangle count display
     const triangleCount = 2 * (numParticles - 1) * (numParticles - 1);
@@ -153,7 +221,7 @@ function recreateSimpleCloth(numTriangles: number): void {
         if (useSphere) {
             scene.cloth.resetToInitialState();
             // Apply gentle gravity settings for Scene 2
-            scene.cloth.setGravityAcce(0.8);
+            scene.cloth.setGravityAcce(getGravityInputValue());
             scene.cloth.setFluidDensity(3.0);
             scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
             scene.cloth.setDampingConst(15.0);
@@ -169,16 +237,23 @@ function recreateSimpleCloth(numTriangles: number): void {
         }
         if (useSphere) {
             scene.cloth = createSimpleClothWithSphere(numTriangles);
-            // Apply gentle gravity settings for Scene 2
-            scene.cloth.setGravityAcce(0.8);
-            scene.cloth.setFluidDensity(3.0);
-            scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
-            scene.cloth.setDampingConst(15.0);
-            scene.cloth.setSpringConst(100.0); // Lower default for simple mode to avoid stretching
+            // Apply current UI settings for Scene 2 simple mode
+            scene.cloth.setGravityAcce(getGravityInputValue());
+            scene.cloth.setFluidDensity(getFluidDensityInputValue());
+            scene.cloth.setWindVelocity(getWindVelocityInputValue());
+            scene.cloth.setDampingConst(getDampingConstInputValue());
+            scene.cloth.setSpringConst(getSpringConstInputValue());
+            scene.cloth.setMass(getMassInputValue());
             // Cloth does not start dropped - user clicks "Drop!" button
         } else {
             scene.cloth = createSimpleCloth(numTriangles);
             scene.cloth.enablePhysics(); // Scene 1 starts with physics running, but top row stays fixed
+            scene.cloth.setGravityAcce(getGravityInputValue());
+            scene.cloth.setFluidDensity(getFluidDensityInputValue());
+            scene.cloth.setWindVelocity(getWindVelocityInputValue());
+            scene.cloth.setDampingConst(getDampingConstInputValue());
+            scene.cloth.setSpringConst(getSpringConstInputValue());
+            scene.cloth.setMass(getMassInputValue());
         }
         if (scene.cloth instanceof SimpleCloth) {
             const actualTriangleCount = scene.cloth.getNumTriangles();
@@ -207,7 +282,7 @@ function switchMode(mode: ClothMode): void {
         if (useSphere) {
             scene.cloth = createClothWithSphere(25);
             // Apply gentle gravity settings for Scene 2
-            scene.cloth.setGravityAcce(0.8);
+            scene.cloth.setGravityAcce(getGravityInputValue());
             scene.cloth.setFluidDensity(3.0);
             scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
             scene.cloth.setDampingConst(15.0);
@@ -232,16 +307,23 @@ function switchMode(mode: ClothMode): void {
     } else {
         if (useSphere) {
             scene.cloth = createSimpleClothWithSphere(1000);
-            // Apply gentle gravity settings for Scene 2
-            scene.cloth.setGravityAcce(0.8);
-            scene.cloth.setFluidDensity(3.0);
-            scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
-            scene.cloth.setDampingConst(15.0);
-            scene.cloth.setSpringConst(100.0); // Lower default for simple mode to avoid stretching
+            // Apply current UI settings for Scene 2 simple mode
+            scene.cloth.setGravityAcce(getGravityInputValue());
+            scene.cloth.setFluidDensity(getFluidDensityInputValue());
+            scene.cloth.setWindVelocity(getWindVelocityInputValue());
+            scene.cloth.setDampingConst(getDampingConstInputValue());
+            scene.cloth.setSpringConst(getSpringConstInputValue());
+            scene.cloth.setMass(getMassInputValue());
             // Cloth does not start dropped - user clicks "Drop!" button
         } else {
             scene.cloth = createSimpleCloth(1000);
             scene.cloth.enablePhysics(); // Scene 1 starts with physics running, but top row stays fixed
+            scene.cloth.setGravityAcce(getGravityInputValue());
+            scene.cloth.setFluidDensity(getFluidDensityInputValue());
+            scene.cloth.setWindVelocity(getWindVelocityInputValue());
+            scene.cloth.setDampingConst(getDampingConstInputValue());
+            scene.cloth.setSpringConst(getSpringConstInputValue());
+            scene.cloth.setMass(getMassInputValue());
         }
         if (scene.cloth instanceof SimpleCloth) {
             const actualTriangleCount = scene.cloth.getNumTriangles();
@@ -303,11 +385,13 @@ function switchScene(sceneIndex: number): void {
         scene.cloth.destroy();
         // Create new cloth with sphere
         scene.cloth = createClothWithSphere(25);
-        // Apply gentle gravity settings for Scene 2
-        scene.cloth.setGravityAcce(0.8);
-        scene.cloth.setFluidDensity(3.0);
-        scene.cloth.setWindVelocity([0.0, 0.0, 0.0]);
-        scene.cloth.setDampingConst(15.0);
+        // Apply current UI settings for Scene 2
+        scene.cloth.setGravityAcce(getGravityInputValue());
+        scene.cloth.setFluidDensity(getFluidDensityInputValue());
+        scene.cloth.setWindVelocity(getWindVelocityInputValue());
+        scene.cloth.setDampingConst(getDampingConstInputValue());
+        scene.cloth.setSpringConst(getSpringConstInputValue());
+        scene.cloth.setMass(getMassInputValue());
         // Cloth does not start dropped - user clicks "Drop!" button
     } else {
         // For Scene 1, just reset timing
@@ -397,11 +481,13 @@ async function init(): Promise<void> {
     camera2.setAspect(canvas.width / canvas.height);
     camera2.update();
     const cloth2 = createClothWithSphere(25);
-    // Apply gentle gravity settings for Scene 2
-    cloth2.setGravityAcce(0.8);
-    cloth2.setFluidDensity(3.0);
-    cloth2.setWindVelocity([0.0, 0.0, 0.0]);
-    cloth2.setDampingConst(15.0);
+    // Apply current UI settings for Scene 2
+    cloth2.setGravityAcce(getGravityInputValue());
+    cloth2.setFluidDensity(getFluidDensityInputValue());
+    cloth2.setWindVelocity(getWindVelocityInputValue());
+    cloth2.setDampingConst(getDampingConstInputValue());
+    cloth2.setSpringConst(getSpringConstInputValue());
+    cloth2.setMass(getMassInputValue());
     // Cloth does not start dropped - user clicks "Drop!" button
     scenes.push(new Scene(cloth2, camera2, 'physics'));
     
