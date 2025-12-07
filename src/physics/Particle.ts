@@ -1,7 +1,7 @@
 import { vec3 } from 'gl-matrix';
 
 const EPSILON = 1e-6;
-const BASE_COLLISION_MARGIN = 0.02; // Base margin for plane collision
+const BASE_COLLISION_MARGIN = 0.05; // Base margin for plane collision
 
 export class Particle {
     public position: vec3;

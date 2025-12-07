@@ -388,7 +388,8 @@ export class Cloth {
         }
     }
     
-    // Project triangle centroids to ensure face centers stay outside sphere
+    // Project triangle sample points to ensure faces stay outside sphere
+    // Checks centroid + 3 edge midpoints for better coverage
     private enforceTriangleCentroidProjection(): void {
         if (!this.isSphericalGround) return;
         
@@ -396,6 +397,34 @@ export class Cloth {
         const sphereCenter = sphereGround.getCenter();
         const sphereRadius = sphereGround.getRadius();
         const minDistance = sphereRadius + 0.01; // Small margin above sphere surface
+        
+        // Helper to check a point and push vertices if needed
+        const checkAndPushPoint = (
+            samplePoint: vec3,
+            vertices: vec3[],
+            particles: { isFixed: boolean }[],
+            weight: number // How much each vertex contributes (0.5 for edge midpoint, 0.333 for centroid)
+        ) => {
+            const toPoint = vec3.create();
+            vec3.sub(toPoint, samplePoint, sphereCenter);
+            const distance = vec3.length(toPoint);
+            
+            if (distance < minDistance) {
+                const pushAmount = (minDistance - distance) * weight + 0.005;
+                
+                if (distance < EPSILON) {
+                    vec3.set(toPoint, 0, 1, 0);
+                } else {
+                    vec3.normalize(toPoint, toPoint);
+                }
+                
+                for (let j = 0; j < vertices.length; j++) {
+                    if (!particles[j].isFixed) {
+                        vec3.scaleAndAdd(vertices[j], vertices[j], toPoint, pushAmount);
+                    }
+                }
+            }
+        };
         
         // Process each triangle
         for (let i = 0; i < this.indices.length; i += 3) {
@@ -407,39 +436,37 @@ export class Cloth {
             const p1 = this.particles[i1].getPosition();
             const p2 = this.particles[i2].getPosition();
             
-            // Compute centroid
+            const particles = [
+                { isFixed: this.particles[i0].isFixedParticle() },
+                { isFixed: this.particles[i1].isFixedParticle() },
+                { isFixed: this.particles[i2].isFixedParticle() }
+            ];
+            
+            // 1. Check centroid (affects all 3 vertices equally)
             const centroid = vec3.create();
             vec3.add(centroid, p0, p1);
             vec3.add(centroid, centroid, p2);
             vec3.scale(centroid, centroid, 1/3);
+            checkAndPushPoint(centroid, [p0, p1, p2], particles, 0.4);
             
-            // Check if centroid is inside sphere
-            const toCentroid = vec3.create();
-            vec3.sub(toCentroid, centroid, sphereCenter);
-            const distance = vec3.length(toCentroid);
+            // 2. Check edge midpoints (affects the 2 vertices of that edge)
+            // Edge 0-1 midpoint
+            const mid01 = vec3.create();
+            vec3.add(mid01, p0, p1);
+            vec3.scale(mid01, mid01, 0.5);
+            checkAndPushPoint(mid01, [p0, p1], [particles[0], particles[1]], 0.6);
             
-            if (distance < minDistance) {
-                // Calculate how much to push outward
-                const pushAmount = (minDistance - distance) / 3 + 0.01; // Divide by 3 since we push all 3 vertices
-                
-                // Push direction (from sphere center through centroid)
-                if (distance < EPSILON) {
-                    vec3.set(toCentroid, 0, 1, 0);
-                } else {
-                    vec3.normalize(toCentroid, toCentroid);
-                }
-                
-                // Push each vertex outward (only if not fixed)
-                if (!this.particles[i0].isFixedParticle()) {
-                    vec3.scaleAndAdd(p0, p0, toCentroid, pushAmount);
-                }
-                if (!this.particles[i1].isFixedParticle()) {
-                    vec3.scaleAndAdd(p1, p1, toCentroid, pushAmount);
-                }
-                if (!this.particles[i2].isFixedParticle()) {
-                    vec3.scaleAndAdd(p2, p2, toCentroid, pushAmount);
-                }
-            }
+            // Edge 1-2 midpoint
+            const mid12 = vec3.create();
+            vec3.add(mid12, p1, p2);
+            vec3.scale(mid12, mid12, 0.5);
+            checkAndPushPoint(mid12, [p1, p2], [particles[1], particles[2]], 0.6);
+            
+            // Edge 2-0 midpoint
+            const mid20 = vec3.create();
+            vec3.add(mid20, p2, p0);
+            vec3.scale(mid20, mid20, 0.5);
+            checkAndPushPoint(mid20, [p2, p0], [particles[2], particles[0]], 0.6);
         }
     }
     
@@ -513,6 +540,8 @@ export class Cloth {
         
         if (this.wireframeEdgePairs.length === 0) {
             console.warn('No edges found for wireframe rendering');
+            // Still try to create empty buffers to avoid null pointer issues
+            this.wireframeIndexCount = 0;
             return;
         }
         
@@ -521,7 +550,23 @@ export class Cloth {
     }
     
     private updateWireframeBuffers(): void {
-        if (this.wireframeEdgePairs.length === 0) return;
+        if (this.wireframeEdgePairs.length === 0) {
+            // If no edges, ensure buffers are cleared
+            if (this.wireframePositionBuffer) {
+                this.wireframePositionBuffer.destroy();
+                this.wireframePositionBuffer = null;
+            }
+            if (this.wireframeNormalBuffer) {
+                this.wireframeNormalBuffer.destroy();
+                this.wireframeNormalBuffer = null;
+            }
+            if (this.wireframeIndexBuffer) {
+                this.wireframeIndexBuffer.destroy();
+                this.wireframeIndexBuffer = null;
+            }
+            this.wireframeIndexCount = 0;
+            return;
+        }
         
         // Create quad geometry for each edge (thin rectangles)
         const wireframeThickness = 0.03; // Thickness of wireframe lines in world space (increased from 0.01)
@@ -530,8 +575,21 @@ export class Cloth {
         const wireframeIndices: number[] = [];
         
         for (const [v0Idx, v1Idx] of this.wireframeEdgePairs) {
+            // Validate indices
+            if (v0Idx < 0 || v0Idx >= this.positions.length || 
+                v1Idx < 0 || v1Idx >= this.positions.length) {
+                console.warn(`Invalid wireframe edge indices: ${v0Idx}, ${v1Idx}`);
+                continue;
+            }
+            
             const v0 = this.positions[v0Idx];
             const v1 = this.positions[v1Idx];
+            
+            // Validate positions
+            if (!v0 || !v1) {
+                console.warn(`Invalid wireframe edge positions at indices: ${v0Idx}, ${v1Idx}`);
+                continue;
+            }
             
             // Calculate edge direction
             const edgeDir = vec3.create();
@@ -765,15 +823,17 @@ export class Cloth {
         }
 
         // Post-integration collision projection (helps for bent faces)
-        for (let iter = 0; iter < 2; iter++) {
+        // Run multiple iterations: vertex projection + face projection
+        for (let iter = 0; iter < 3; iter++) {
+            // First project vertices
             for (const p of this.particles) {
                 p.enforceSphereContact();
             }
-        }
-        
-        // Project triangle centroids to ensure face centers stay outside sphere
-        if (this.isSphericalGround) {
-            this.enforceTriangleCentroidProjection();
+            
+            // Then project triangle faces (centroid + edge midpoints)
+            if (this.isSphericalGround) {
+                this.enforceTriangleCentroidProjection();
+            }
         }
 
         // Reset and recompute normals
