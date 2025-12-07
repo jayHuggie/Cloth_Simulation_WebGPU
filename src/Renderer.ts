@@ -250,7 +250,7 @@ export class Renderer {
         lightingData[21] = this.clothColor[1];
         lightingData[22] = this.clothColor[2];
         lightingData[23] = 0.0; // padding
-        
+
         // Write the buffer - WebGPU queue operations are automatically ordered
         // However, to ensure the write completes before rendering, we'll write it and then
         // create the encoder (which should ensure ordering)

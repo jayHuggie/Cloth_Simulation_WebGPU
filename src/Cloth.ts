@@ -167,6 +167,9 @@ export class Cloth {
             const sphereCenter = sphereGround.getCenter();
             const sphereRadius = sphereGround.getRadius();
             
+            // Ensure all particles have sphere collision data set
+            this.ensureSphereCollisionData();
+            
             for (const particle of this.particles) {
                 const pos = particle.getPosition();
                 const toParticle = vec3.create();
@@ -336,6 +339,11 @@ export class Cloth {
     }
     
     resetToInitialState(): void {
+        // Ensure sphere collision data is set for Scene 2
+        if (this.isSphericalGround) {
+            this.ensureSphereCollisionData();
+        }
+        
         // Reset all particles to initial positions
         for (let i = 0; i < this.particles.length; i++) {
             const particle = this.particles[i];
@@ -364,7 +372,83 @@ export class Cloth {
         this.updateBuffers();
     }
     
+    // Ensure all particles have sphere collision data set (safety check for Scene 2)
+    private ensureSphereCollisionData(): void {
+        if (!this.isSphericalGround) return;
+        
+        const sphereGround = this.ground as SphericalGround;
+        const sphereCenter = sphereGround.getCenter();
+        const sphereRadius = sphereGround.getRadius();
+        
+        for (const particle of this.particles) {
+            // Use setSphereCollision to ensure data is set (even if already set)
+            particle.setSphereCollision(sphereCenter, sphereRadius);
+            // Set edge length for adaptive collision margin calculation
+            particle.setEdgeLength(this.restLength);
+        }
+    }
+    
+    // Project triangle centroids to ensure face centers stay outside sphere
+    private enforceTriangleCentroidProjection(): void {
+        if (!this.isSphericalGround) return;
+        
+        const sphereGround = this.ground as SphericalGround;
+        const sphereCenter = sphereGround.getCenter();
+        const sphereRadius = sphereGround.getRadius();
+        const minDistance = sphereRadius + 0.01; // Small margin above sphere surface
+        
+        // Process each triangle
+        for (let i = 0; i < this.indices.length; i += 3) {
+            const i0 = this.indices[i];
+            const i1 = this.indices[i + 1];
+            const i2 = this.indices[i + 2];
+            
+            const p0 = this.particles[i0].getPosition();
+            const p1 = this.particles[i1].getPosition();
+            const p2 = this.particles[i2].getPosition();
+            
+            // Compute centroid
+            const centroid = vec3.create();
+            vec3.add(centroid, p0, p1);
+            vec3.add(centroid, centroid, p2);
+            vec3.scale(centroid, centroid, 1/3);
+            
+            // Check if centroid is inside sphere
+            const toCentroid = vec3.create();
+            vec3.sub(toCentroid, centroid, sphereCenter);
+            const distance = vec3.length(toCentroid);
+            
+            if (distance < minDistance) {
+                // Calculate how much to push outward
+                const pushAmount = (minDistance - distance) / 3 + 0.01; // Divide by 3 since we push all 3 vertices
+                
+                // Push direction (from sphere center through centroid)
+                if (distance < EPSILON) {
+                    vec3.set(toCentroid, 0, 1, 0);
+                } else {
+                    vec3.normalize(toCentroid, toCentroid);
+                }
+                
+                // Push each vertex outward (only if not fixed)
+                if (!this.particles[i0].isFixedParticle()) {
+                    vec3.scaleAndAdd(p0, p0, toCentroid, pushAmount);
+                }
+                if (!this.particles[i1].isFixedParticle()) {
+                    vec3.scaleAndAdd(p1, p1, toCentroid, pushAmount);
+                }
+                if (!this.particles[i2].isFixedParticle()) {
+                    vec3.scaleAndAdd(p2, p2, toCentroid, pushAmount);
+                }
+            }
+        }
+    }
+    
     drop(): void {
+        // Ensure sphere collision data is set for Scene 2 before dropping
+        if (this.isSphericalGround) {
+            this.ensureSphereCollisionData();
+        }
+        
         this.isDropped = true;
         // Release fixed particles (top row) to allow dropping
         for (const idx of this.fixedParticleIdx) {
@@ -657,13 +741,13 @@ export class Cloth {
 
         let deltaT = (currT - this.prevT) / 1000.0;
         // Clamp deltaT to prevent huge jumps (e.g., if tab was inactive)
-        deltaT = Math.min(deltaT, 0.1); // Max 100ms
+        deltaT = Math.min(deltaT, 0.03); // Max 30ms to reduce large steps
         this.prevT = currT;
 
-        deltaT /= this.numOfOversamples;
+           deltaT /= this.numOfOversamples;
 
-        // Physics simulation with oversampling
-        for (let i = 0; i < this.numOfOversamples; i++) {
+           // Physics simulation with oversampling
+           for (let i = 0; i < this.numOfOversamples; i++) {
             // Compute spring damper forces
             for (const sp of this.connections) {
                 sp.computeForce();
@@ -678,6 +762,18 @@ export class Cloth {
             for (const p of this.particles) {
                 p.integrate(deltaT);
             }
+        }
+
+        // Post-integration collision projection (helps for bent faces)
+        for (let iter = 0; iter < 2; iter++) {
+            for (const p of this.particles) {
+                p.enforceSphereContact();
+            }
+        }
+        
+        // Project triangle centroids to ensure face centers stay outside sphere
+        if (this.isSphericalGround) {
+            this.enforceTriangleCentroidProjection();
         }
 
         // Reset and recompute normals
