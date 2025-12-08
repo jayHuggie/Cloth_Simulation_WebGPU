@@ -22,24 +22,25 @@ export class Camera {
 
     update(): void {
         // Compute camera world matrix
-        // Start with translation along Z axis
+        // Start with translation along Z axis (camera position relative to target)
         const world = mat4.create();
         mat4.translate(world, world, [0, 0, this.distance]);
         
-        // Apply rotations (Y first, then X)
+        // Apply rotations (Y first, then X) around the target point
         const rotY = eulerAngleY(-this.azimuth * Math.PI / 180);
         const rotX = eulerAngleX(-this.incline * Math.PI / 180);
         const rotYX = multiply(rotY, rotX);
-        const worldFinal = multiply(rotYX, world);
+        const worldRotated = multiply(rotYX, world);
+        
+        // Apply pan offset: translate the target point (orbit center) before camera positioning
+        // This makes rotations orbit around the panned position
+        const worldFinal = mat4.create();
+        mat4.copy(worldFinal, worldRotated);
+        // Pan offset is applied in world space to move the target/orbit center
+        mat4.translate(worldFinal, worldFinal, [-this.panX, -this.panY, -this.panZ]);
 
         // Compute view matrix (inverse of world matrix)
         const view = inverse(worldFinal);
-        
-        // Apply pan offset to view matrix (translates the scene relative to camera)
-        // Pan is applied as a translation in view space
-        if (this.panX !== 0.0 || this.panY !== 0.0 || this.panZ !== 0.0) {
-            mat4.translate(view, view, [-this.panX, -this.panY, -this.panZ]);
-        }
 
         // Compute perspective projection matrix
         const project = perspective(this.fov, this.aspect, this.nearClip, this.farClip);

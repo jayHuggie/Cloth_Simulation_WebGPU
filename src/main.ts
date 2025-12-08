@@ -486,10 +486,10 @@ async function init(): Promise<void> {
     const camera2 = new Camera();
     camera2.setAspect(canvas.width / canvas.height);
     camera2.setDistance(15.00);
-    camera2.setAzimuth(26.00);
-    camera2.setIncline(31.00);
-    camera2.setPanX(1.80);
-    camera2.setPanY(0.20);
+    camera2.setAzimuth(-331.00);
+    camera2.setIncline(35.00);
+    camera2.setPanX(-1.60);
+    camera2.setPanY(-0.20);
     camera2.setPanZ(0.00);
     camera2.update();
     const cloth2 = createClothWithSphere(25);
@@ -546,7 +546,27 @@ function setupUICallbacks(): void {
 
     resetCameraFn = () => {
         const scene = getCurrentScene();
-        scene.camera.reset();
+        const sceneIndex = currentSceneIndex;
+        
+        // Reset to scene-specific initial values
+        if (sceneIndex === 0) {
+            // Scene 1 initial values
+            scene.camera.setDistance(11.00);
+            scene.camera.setAzimuth(43.00);
+            scene.camera.setIncline(21.00);
+            scene.camera.setPanX(0.40);
+            scene.camera.setPanY(0.60);
+            scene.camera.setPanZ(0.00);
+        } else if (sceneIndex === 1) {
+            // Scene 2 initial values
+            scene.camera.setDistance(15.00);
+            scene.camera.setAzimuth(-331.00);
+            scene.camera.setIncline(35.00);
+            scene.camera.setPanX(-1.60);
+            scene.camera.setPanY(-0.20);
+            scene.camera.setPanZ(0.00);
+        }
+        
         scene.camera.setAspect(canvas.width / canvas.height);
         scene.camera.update();
     };
@@ -718,6 +738,11 @@ function setupUIControls(): void {
 function setupEventListeners(): void {
     // Keyboard
     window.addEventListener('keydown', (e) => {
+        // Prevent default for spacebar in Scene 2 to avoid page scrolling
+        if (e.key === ' ' && currentSceneIndex === 1) {
+            e.preventDefault();
+        }
+        
         switch (e.key) {
             case 'Escape':
                 isRunning = false;
@@ -791,6 +816,26 @@ function setupEventListeners(): void {
                 const scene = getCurrentScene();
                 scene.camera.addPan(0.2, 0.0, 0.0);
                 scene.camera.update();
+                break;
+            }
+            case ' ': {
+                // Spacebar: Toggle drop/reset for Scene 2
+                if (currentSceneIndex === 1) { // Scene 2
+                    const scene = getCurrentScene();
+                    if (scene.cloth instanceof Cloth) {
+                        if (scene.cloth.isClothDropped()) {
+                            scene.cloth.resetToInitialState();
+                        } else {
+                            scene.cloth.drop();
+                        }
+                    } else if (scene.cloth instanceof SimpleCloth) {
+                        if (scene.cloth.isClothDropped()) {
+                            scene.cloth.resetToInitialState();
+                        } else {
+                            scene.cloth.drop();
+                        }
+                    }
+                }
                 break;
             }
         }
