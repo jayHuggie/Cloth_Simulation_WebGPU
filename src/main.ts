@@ -472,10 +472,10 @@ async function init(): Promise<void> {
     const camera1 = new Camera();
     camera1.setAspect(canvas.width / canvas.height);
     camera1.setDistance(11.00);
-    camera1.setAzimuth(43.00);
-    camera1.setIncline(21.00);
-    camera1.setPanX(0.40);
-    camera1.setPanY(0.60);
+    camera1.setAzimuth(56.00);
+    camera1.setIncline(17.00);
+    camera1.setPanX(-0.80);
+    camera1.setPanY(-0.60);
     camera1.setPanZ(0.00);
     camera1.update();
     const cloth1 = createCloth(25);
@@ -552,10 +552,10 @@ function setupUICallbacks(): void {
         if (sceneIndex === 0) {
             // Scene 1 initial values
             scene.camera.setDistance(11.00);
-            scene.camera.setAzimuth(43.00);
-            scene.camera.setIncline(21.00);
-            scene.camera.setPanX(0.40);
-            scene.camera.setPanY(0.60);
+            scene.camera.setAzimuth(56.00);
+            scene.camera.setIncline(17.00);
+            scene.camera.setPanX(-0.80);
+            scene.camera.setPanY(-0.60);
             scene.camera.setPanZ(0.00);
         } else if (sceneIndex === 1) {
             // Scene 2 initial values
@@ -788,33 +788,33 @@ function setupEventListeners(): void {
             }
             case 'w':
             case 'W': {
-                // Pan up
-                const scene = getCurrentScene();
-                scene.camera.addPan(0.0, 0.2, 0.0);
-                scene.camera.update();
-                break;
-            }
-            case 's':
-            case 'S': {
-                // Pan down
+                // Pan down (reversed)
                 const scene = getCurrentScene();
                 scene.camera.addPan(0.0, -0.2, 0.0);
                 scene.camera.update();
                 break;
             }
+            case 's':
+            case 'S': {
+                // Pan up (reversed)
+                const scene = getCurrentScene();
+                scene.camera.addPan(0.0, 0.2, 0.0);
+                scene.camera.update();
+                break;
+            }
             case 'a':
             case 'A': {
-                // Pan right
+                // Pan left (reversed)
                 const scene = getCurrentScene();
-                scene.camera.addPan(-0.2, 0.0, 0.0);
+                scene.camera.addPan(0.2, 0.0, 0.0);
                 scene.camera.update();
                 break;
             }
             case 'd':
             case 'D': {
-                // Pan left
+                // Pan right (reversed)
                 const scene = getCurrentScene();
-                scene.camera.addPan(0.2, 0.0, 0.0);
+                scene.camera.addPan(-0.2, 0.0, 0.0);
                 scene.camera.update();
                 break;
             }
