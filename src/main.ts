@@ -154,12 +154,12 @@ function createClothWithSphere(numParticles: number): Cloth {
 }
 
 function createSimpleClothWithSphere(numTriangles: number): SimpleCloth {
-    // Create a sphere at the origin with radius 2.0 (top at y=2.0, bottom at y=-2.0)
+    // Create a sphere shifted to the left with radius 2.0 (top at y=2.0, bottom at y=-2.0)
     const sphereGround = new SphericalGround([0.0, 0.0, 0.0], 2.0, device);
     return new SimpleCloth(
         4.0, // size
         numTriangles, // target number of triangles
-        [-2.0, 4.0, 2.0], // top left position - cloth is horizontal, centered above sphere at Y=4.0, Z goes from 2.0 to -2.0
+        [-2.0, 4.0, 2.0], // top left position - cloth is horizontal, centered above sphere at Y=4.0, Z goes from 2.0 to -2.0, shifted left
         [1.0, 0.0, 0.0], // horizontal direction (moves in +X)
         [0.0, 0.0, -1.0], // vertical direction (moves in -Z, making cloth horizontal/parallel to sphere)
         device,
@@ -471,6 +471,12 @@ async function init(): Promise<void> {
     // Create Scene 1
     const camera1 = new Camera();
     camera1.setAspect(canvas.width / canvas.height);
+    camera1.setDistance(11.00);
+    camera1.setAzimuth(43.00);
+    camera1.setIncline(21.00);
+    camera1.setPanX(0.40);
+    camera1.setPanY(0.60);
+    camera1.setPanZ(0.00);
     camera1.update();
     const cloth1 = createCloth(25);
     cloth1.enablePhysics(); // Scene 1 starts with physics running, but top row stays fixed
@@ -479,6 +485,12 @@ async function init(): Promise<void> {
     // Create Scene 2 (with spherical ground)
     const camera2 = new Camera();
     camera2.setAspect(canvas.width / canvas.height);
+    camera2.setDistance(15.00);
+    camera2.setAzimuth(26.00);
+    camera2.setIncline(31.00);
+    camera2.setPanX(1.80);
+    camera2.setPanY(0.20);
+    camera2.setPanZ(0.00);
     camera2.update();
     const cloth2 = createClothWithSphere(25);
     // Apply current UI settings for Scene 2
@@ -725,6 +737,59 @@ function setupEventListeners(): void {
             case 'X': {
                 const scene = getCurrentScene();
                 scene.camera.setDistance(scene.camera.getDistance() + 1.0);
+                scene.camera.update();
+                break;
+            }
+            case 'l':
+            case 'L': {
+                // Log current camera data for finding perfect initial position
+                const scene = getCurrentScene();
+                const sceneIndex = currentSceneIndex;
+                console.log(`=== Camera Data for Scene ${sceneIndex + 1} ===`);
+                console.log(`Distance: ${scene.camera.getDistance().toFixed(2)}`);
+                console.log(`Azimuth: ${scene.camera.getAzimuth().toFixed(2)}`);
+                console.log(`Incline: ${scene.camera.getIncline().toFixed(2)}`);
+                console.log(`Pan X: ${scene.camera.getPanX().toFixed(2)}`);
+                console.log(`Pan Y: ${scene.camera.getPanY().toFixed(2)}`);
+                console.log(`Pan Z: ${scene.camera.getPanZ().toFixed(2)}`);
+                console.log(`Code: camera${sceneIndex + 1}.setDistance(${scene.camera.getDistance().toFixed(2)});`);
+                console.log(`      camera${sceneIndex + 1}.setAzimuth(${scene.camera.getAzimuth().toFixed(2)});`);
+                console.log(`      camera${sceneIndex + 1}.setIncline(${scene.camera.getIncline().toFixed(2)});`);
+                console.log(`      camera${sceneIndex + 1}.setPanX(${scene.camera.getPanX().toFixed(2)});`);
+                console.log(`      camera${sceneIndex + 1}.setPanY(${scene.camera.getPanY().toFixed(2)});`);
+                console.log(`      camera${sceneIndex + 1}.setPanZ(${scene.camera.getPanZ().toFixed(2)});`);
+                console.log('=====================================');
+                break;
+            }
+            case 'w':
+            case 'W': {
+                // Pan up
+                const scene = getCurrentScene();
+                scene.camera.addPan(0.0, 0.2, 0.0);
+                scene.camera.update();
+                break;
+            }
+            case 's':
+            case 'S': {
+                // Pan down
+                const scene = getCurrentScene();
+                scene.camera.addPan(0.0, -0.2, 0.0);
+                scene.camera.update();
+                break;
+            }
+            case 'a':
+            case 'A': {
+                // Pan right
+                const scene = getCurrentScene();
+                scene.camera.addPan(-0.2, 0.0, 0.0);
+                scene.camera.update();
+                break;
+            }
+            case 'd':
+            case 'D': {
+                // Pan left
+                const scene = getCurrentScene();
+                scene.camera.addPan(0.2, 0.0, 0.0);
                 scene.camera.update();
                 break;
             }

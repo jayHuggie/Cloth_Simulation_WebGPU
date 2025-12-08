@@ -10,6 +10,9 @@ export class Camera {
     private distance: number = 10.0;
     private azimuth: number = 0.0;
     private incline: number = 20.0;
+    private panX: number = 0.0;
+    private panY: number = 0.0;
+    private panZ: number = 0.0;
 
     private viewProjectMtx: mat4 = mat4.create();
 
@@ -31,6 +34,12 @@ export class Camera {
 
         // Compute view matrix (inverse of world matrix)
         const view = inverse(worldFinal);
+        
+        // Apply pan offset to view matrix (translates the scene relative to camera)
+        // Pan is applied as a translation in view space
+        if (this.panX !== 0.0 || this.panY !== 0.0 || this.panZ !== 0.0) {
+            mat4.translate(view, view, [-this.panX, -this.panY, -this.panZ]);
+        }
 
         // Compute perspective projection matrix
         const project = perspective(this.fov, this.aspect, this.nearClip, this.farClip);
@@ -47,6 +56,9 @@ export class Camera {
         this.distance = 10.0;
         this.azimuth = 0.0;
         this.incline = 20.0;
+        this.panX = 0.0;
+        this.panY = 0.0;
+        this.panZ = 0.0;
     }
 
     setAspect(aspect: number): void {
@@ -75,6 +87,36 @@ export class Camera {
 
     getIncline(): number {
         return this.incline;
+    }
+    
+    setPanX(panX: number): void {
+        this.panX = panX;
+    }
+    
+    setPanY(panY: number): void {
+        this.panY = panY;
+    }
+    
+    setPanZ(panZ: number): void {
+        this.panZ = panZ;
+    }
+    
+    getPanX(): number {
+        return this.panX;
+    }
+    
+    getPanY(): number {
+        return this.panY;
+    }
+    
+    getPanZ(): number {
+        return this.panZ;
+    }
+    
+    addPan(deltaX: number, deltaY: number, deltaZ: number): void {
+        this.panX += deltaX;
+        this.panY += deltaY;
+        this.panZ += deltaZ;
     }
 
     getViewProjectMtx(): mat4 {
