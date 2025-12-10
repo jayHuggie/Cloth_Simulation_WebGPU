@@ -380,9 +380,9 @@ function switchScene(sceneIndex: number): void {
     currentSceneIndex = sceneIndex;
     const scene = getCurrentScene();
     
-    // For Scene 2 (spherical ground), recreate the cloth fresh each time
+    // For Scene 2 (spherical ground, now at index 0), recreate the cloth fresh each time
     // This ensures a clean state without accumulated physics artifacts
-    if (sceneIndex === 1) {
+    if (sceneIndex === 0) {
         // Destroy old cloth
         scene.cloth.destroy();
         // Create new cloth with sphere
@@ -396,7 +396,7 @@ function switchScene(sceneIndex: number): void {
         scene.cloth.setMass(getMassInputValue());
         // Cloth does not start dropped - user clicks "Drop!" button
     } else {
-        // For Scene 1, just reset timing
+        // For Scene 1 (now at index 1), just reset timing
         if (scene.cloth instanceof Cloth) {
             scene.cloth.resetTiming();
         } else if (scene.cloth instanceof SimpleCloth) {
@@ -418,7 +418,7 @@ function switchScene(sceneIndex: number): void {
     // Show/hide Scene 2 specific controls (Before Drop / Drop!)
     const scene2Controls = document.getElementById('scene2Controls');
     if (scene2Controls) {
-        scene2Controls.style.display = sceneIndex === 1 ? 'block' : 'none';
+        scene2Controls.style.display = sceneIndex === 0 ? 'block' : 'none';
     }
     
     // Update camera aspect ratio
@@ -466,21 +466,7 @@ async function init(): Promise<void> {
     );
     await renderer.initialize(vertexShaderCode, fragmentShaderCode);
 
-    // Create Scene 1
-    const camera1 = new Camera();
-    camera1.setAspect(canvas.width / canvas.height);
-    camera1.setDistance(11.00);
-    camera1.setAzimuth(56.00);
-    camera1.setIncline(17.00);
-    camera1.setPanX(-0.80);
-    camera1.setPanY(-0.60);
-    camera1.setPanZ(0.00);
-    camera1.update();
-    const cloth1 = createCloth(25);
-    cloth1.enablePhysics(); // Scene 1 starts with physics running, but top row stays fixed
-    scenes.push(new Scene(cloth1, camera1, 'physics'));
-    
-    // Create Scene 2 (with spherical ground)
+    // Create Scene 2 (with spherical ground) - now first
     const camera2 = new Camera();
     camera2.setAspect(canvas.width / canvas.height);
     camera2.setDistance(15.00);
@@ -500,6 +486,20 @@ async function init(): Promise<void> {
     cloth2.setMass(getMassInputValue());
     // Cloth does not start dropped - user clicks "Drop!" button
     scenes.push(new Scene(cloth2, camera2, 'physics'));
+    
+    // Create Scene 1 - now second
+    const camera1 = new Camera();
+    camera1.setAspect(canvas.width / canvas.height);
+    camera1.setDistance(11.00);
+    camera1.setAzimuth(56.00);
+    camera1.setIncline(17.00);
+    camera1.setPanX(-0.80);
+    camera1.setPanY(-0.60);
+    camera1.setPanZ(0.00);
+    camera1.update();
+    const cloth1 = createCloth(25);
+    cloth1.enablePhysics(); // Scene 1 starts with physics running, but top row stays fixed
+    scenes.push(new Scene(cloth1, camera1, 'physics'));
     
     // Initialize triangle count display
     const triangleCount = 2 * (25 - 1) * (25 - 1);
@@ -548,20 +548,20 @@ function setupUICallbacks(): void {
         
         // Reset to scene-specific initial values
         if (sceneIndex === 0) {
-            // Scene 1 initial values
-            scene.camera.setDistance(11.00);
-            scene.camera.setAzimuth(56.00);
-            scene.camera.setIncline(17.00);
-            scene.camera.setPanX(-0.80);
-            scene.camera.setPanY(-0.60);
-            scene.camera.setPanZ(0.00);
-        } else if (sceneIndex === 1) {
-            // Scene 2 initial values
+            // Scene 2 initial values (now at index 0)
             scene.camera.setDistance(15.00);
             scene.camera.setAzimuth(-331.00);
             scene.camera.setIncline(35.00);
             scene.camera.setPanX(-1.60);
             scene.camera.setPanY(-0.20);
+            scene.camera.setPanZ(0.00);
+        } else if (sceneIndex === 1) {
+            // Scene 1 initial values (now at index 1)
+            scene.camera.setDistance(11.00);
+            scene.camera.setAzimuth(56.00);
+            scene.camera.setIncline(17.00);
+            scene.camera.setPanX(-0.80);
+            scene.camera.setPanY(-0.60);
             scene.camera.setPanZ(0.00);
         }
         
@@ -737,7 +737,7 @@ function setupEventListeners(): void {
     // Keyboard
     window.addEventListener('keydown', (e) => {
         // Prevent default for spacebar in Scene 2 to avoid page scrolling
-        if (e.key === ' ' && currentSceneIndex === 1) {
+        if (e.key === ' ' && currentSceneIndex === 0) {
             e.preventDefault();
         }
         
@@ -818,7 +818,7 @@ function setupEventListeners(): void {
             }
             case ' ': {
                 // Spacebar: Toggle drop/reset for Scene 2
-                if (currentSceneIndex === 1) { // Scene 2
+                if (currentSceneIndex === 0) { // Scene 2 (now at index 0)
                     const scene = getCurrentScene();
                     if (scene.cloth instanceof Cloth) {
                         if (scene.cloth.isClothDropped()) {
