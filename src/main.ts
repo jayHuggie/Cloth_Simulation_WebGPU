@@ -347,11 +347,18 @@ function switchMode(mode: ClothMode): void {
 
 function updateUIVisibility(): void {
     const scene = getCurrentScene();
+    const sceneIndex = currentSceneIndex;
     const physicsControls = document.getElementById('cloth-coeffs');
     const springDamperControls = document.getElementById('spring-damper');
     const aerodynamicsControls = document.getElementById('aerodynamics');
     const simpleControls = document.getElementById('simple-cloth-controls');
     const numParticlesInput = document.getElementById('numParticles')?.parentElement;
+    
+    // Show/hide Scene 2 specific controls (Prepare Drop / Drop!)
+    const scene2Controls = document.getElementById('scene2Controls');
+    if (scene2Controls) {
+        scene2Controls.style.display = sceneIndex === 0 ? 'block' : 'none';
+    }
     
     if (scene.mode === 'physics') {
         if (physicsControls) physicsControls.style.display = 'block';
@@ -413,12 +420,6 @@ function switchScene(sceneIndex: number): void {
     if (modePhysics && modeSimple) {
         modePhysics.checked = scene.mode === 'physics';
         modeSimple.checked = scene.mode === 'simple';
-    }
-    
-    // Show/hide Scene 2 specific controls (Before Drop / Drop!)
-    const scene2Controls = document.getElementById('scene2Controls');
-    if (scene2Controls) {
-        scene2Controls.style.display = sceneIndex === 0 ? 'block' : 'none';
     }
     
     // Update camera aspect ratio
@@ -513,6 +514,9 @@ async function init(): Promise<void> {
 
     // Setup event listeners
     setupEventListeners();
+    
+    // Update UI visibility for initial scene (Cloth Drop Test is at index 0)
+    updateUIVisibility();
 
     // Ensure buffers are ready before starting render loop
     // Wait one frame to ensure all WebGPU operations are complete
