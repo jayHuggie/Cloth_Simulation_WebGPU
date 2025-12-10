@@ -1,4 +1,6 @@
-import { initWebGPU, loadShaderFromFile } from './utils/webgpu';
+import { initWebGPU, loadShaderModule } from './utils/webgpu';
+import vertexShaderCode from './shaders/cloth.vert.wgsl?raw';
+import fragmentShaderCode from './shaders/cloth.frag.wgsl?raw';
 import { Renderer } from './Renderer';
 import { Cloth } from './Cloth';
 import { SimpleCloth } from './SimpleCloth';
@@ -451,11 +453,7 @@ async function init(): Promise<void> {
     const webgpu = await initWebGPU(canvas);
     device = webgpu.device;
 
-    // Load shaders
-    const vertexShaderResponse = await fetch('/src/shaders/cloth.vert.wgsl');
-    const vertexShaderCode = await vertexShaderResponse.text();
-    const fragmentShaderResponse = await fetch('/src/shaders/cloth.frag.wgsl');
-    const fragmentShaderCode = await fragmentShaderResponse.text();
+    // Shaders are imported at the top of the file
 
     // Create renderer
     renderer = new Renderer(

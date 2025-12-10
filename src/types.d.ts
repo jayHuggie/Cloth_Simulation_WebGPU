@@ -22,3 +22,9 @@ interface Window {
     toggleWireframeFn?: () => void;
 }
 
+// Declare WGSL shader imports
+declare module '*.wgsl?raw' {
+  const content: string;
+  export default content;
+}
+
