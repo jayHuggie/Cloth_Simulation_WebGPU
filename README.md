@@ -10,7 +10,7 @@ https://jayhuggie-cloth.netlify.app/
 - A modern browser with WebGPU support:
   - Chrome 113+ or Edge 113+
   - Safari 18+ (with WebGPU enabled)
-  - Firefox (WebGPU support in development)
+  - Firefox also works too!
  
 ## Features
 
