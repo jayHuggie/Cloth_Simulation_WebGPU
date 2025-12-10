@@ -2,6 +2,16 @@
 
 A real-time cloth physics simulation using WebGPU, converted from the original C++ OpenGL implementation.
 
+# Try it yourself!
+https://jayhuggie-cloth.netlify.app/
+
+## Requirements
+
+- A modern browser with WebGPU support:
+  - Chrome 113+ or Edge 113+
+  - Safari 18+ (with WebGPU enabled)
+  - Firefox (WebGPU support in development)
+ 
 ## Features
 
 - Real-time cloth physics simulation with particle-based system
@@ -10,46 +20,6 @@ A real-time cloth physics simulation using WebGPU, converted from the original C
 - Ground collision detection
 - Interactive camera controls
 - Real-time parameter adjustment via UI
-
-## Requirements
-
-- A modern browser with WebGPU support:
-  - Chrome 113+ or Edge 113+
-  - Safari 18+ (with WebGPU enabled)
-  - Firefox (WebGPU support in development)
-
-## Installation
-
-1. Navigate to the `web` directory:
-```bash
-cd web
-```
-
-2. Install dependencies:
-```bash
-npm install
-```
-
-## Running
-
-Start the development server:
-```bash
-npm run dev
-```
-
-The application will open in your browser at `http://localhost:3000`.
-
-## Building for Production
-
-Build the project:
-```bash
-npm run build
-```
-
-Preview the production build:
-```bash
-npm run preview
-```
 
 ## Controls
 
@@ -138,8 +108,4 @@ WebGPU is a relatively new API. If you encounter issues:
 - Reduce the number of particles in `Cloth.ts` constructor
 - Lower the oversampling count
 - Close other browser tabs
-
-## License
-
-Same as the original project.
 
