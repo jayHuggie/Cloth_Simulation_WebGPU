@@ -353,11 +353,17 @@ function updateUIVisibility(): void {
     const aerodynamicsControls = document.getElementById('aerodynamics');
     const simpleControls = document.getElementById('simple-cloth-controls');
     const numParticlesInput = document.getElementById('numParticles')?.parentElement;
+    const fixedPointsControls = document.getElementById('fixed-points')?.parentElement;
     
     // Show/hide Scene 2 specific controls (Prepare Drop / Drop!)
     const scene2Controls = document.getElementById('scene2Controls');
     if (scene2Controls) {
         scene2Controls.style.display = sceneIndex === 0 ? 'block' : 'none';
+    }
+    
+    // Hide Fixed Points UI for Cloth Drop Test (index 0)
+    if (fixedPointsControls) {
+        fixedPointsControls.style.display = sceneIndex === 0 ? 'none' : 'block';
     }
     
     if (scene.mode === 'physics') {
