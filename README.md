@@ -1,9 +1,17 @@
 # Cloth Simulation - WebGPU
 
-A real-time cloth physics simulation using WebGPU, converted from the original C++ OpenGL implementation.
+![WebGPU](https://img.shields.io/badge/WebGPU-FF4B4B.svg?style=for-the-badge)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6.svg?style=for-the-badge&logo=typescript&logoColor=white)
+![Netlify](https://img.shields.io/badge/Netlify-00C7B7.svg?style=for-the-badge&logo=netlify&logoColor=white)
+
+
+A browser-based, real-time WebGPU cloth simulation using adjustable triangle resolution, mass, gravity, springs, damping, wind, and camera controls.
+
+<img src="/scenes/cloth_webgpu_demo.gif" alt="Cloth Simulation WebGPU Demo" title="Cloth Simulation WebGPU Demo" width="800"/>
 
 # Try it yourself!
-https://jayhuggie-cloth.netlify.app/
+
+[![Click Me :)](https://img.shields.io/badge/Click%20Me%20%3A%29-blueviolet?style=for-the-badge)](https://jayhuggie-cloth.netlify.app/)
 
 ## Requirements
 
@@ -24,8 +32,7 @@ https://jayhuggie-cloth.netlify.app/
 ## Controls
 
 ### Mouse
-- **Left Click + Drag**: Rotate camera
-- **Right Click + Drag**: Zoom in/out
+- **Right Click + Drag**: Rotate camera
 
 ### Keyboard
 - **R**: Reset camera
