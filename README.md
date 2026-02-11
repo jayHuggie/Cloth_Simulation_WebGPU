@@ -7,7 +7,12 @@
 
 A browser-based, real-time WebGPU cloth simulation using adjustable triangle resolution, mass, gravity, springs, damping, wind, and camera controls.
 
-<img src="/scenes/cloth_webgpu_demo.gif" alt="Cloth Simulation WebGPU Demo" title="Cloth Simulation WebGPU Demo" width="800"/>
+### Cloth Drop Test
+<img src="/scenes/cloth_webgpu_demo.gif" alt="Cloth Drop Test WebGPU Demo" title="Cloth Drop Test WebGPU Demo" width="800"/>
+
+### Cloth Wind Test
+*(Use the top-right controls to switch between simulation modes!)*
+<img src="/scenes/cloth_wind_demo.gif" alt="Cloth Wind Test WebGPU Demo" title="Cloth Wind Test WebGPU Demo" width="800"/>
 
 # Try it yourself!
 
@@ -19,6 +24,7 @@ A browser-based, real-time WebGPU cloth simulation using adjustable triangle res
   - Chrome 113+ or Edge 113+
   - Safari 18+ (with WebGPU enabled)
   - Firefox also works too!
+- Most mobile phones will work as well :)
  
 ## Features
 
@@ -110,9 +116,4 @@ WebGPU is a relatively new API. If you encounter issues:
 - Update your browser to the latest version
 - Enable WebGPU in browser flags if needed
 - Check browser console for more details
-
-**Performance issues:**
-- Reduce the number of particles in `Cloth.ts` constructor
-- Lower the oversampling count
-- Close other browser tabs
 
