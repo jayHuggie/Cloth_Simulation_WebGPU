@@ -94,8 +94,8 @@ web/
 - Real-time vertex buffer updates
 - Depth testing for proper occlusion
 
-## Differences from C++ Version
-
+## Differences from my previous C++ Version
+Previous version (from my UCSD CSE 169 class project) : https://github.com/jayHuggie/Cloth_Simulation  
 1. **Language**: TypeScript/JavaScript instead of C++
 2. **Graphics API**: WebGPU instead of OpenGL
 3. **Shaders**: WGSL instead of GLSL
